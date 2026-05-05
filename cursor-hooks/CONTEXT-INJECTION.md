@@ -124,14 +124,14 @@ cat ~/.claude-mem/cursor-projects.json
 
 ## Comparison with Claude Code
 
-| Feature | Claude Code | Cursor |
-|---------|-------------|--------|
-| Context injection | ✅ `additionalContext` in hook output | ✅ Auto-updated rules file |
-| Injection timing | Immediate (same prompt) | Before prompt + after summary + after session |
-| Persistence | Session only | File-based (persists across restarts) |
-| Initial setup | Automatic | `claude-mem cursor install` creates initial context |
-| MCP tool access | ✅ Full support | ✅ Full support |
-| Web viewer | ✅ Available | ✅ Available |
+| Feature           | Claude Code                          | Cursor                                              |
+| ----------------- | ------------------------------------ | --------------------------------------------------- |
+| Context injection | ✅ `additionalContext` in hook output | ✅ Auto-updated rules file                           |
+| Injection timing  | Immediate (same prompt)              | Before prompt + after summary + after session       |
+| Persistence       | Session only                         | File-based (persists across restarts)               |
+| Initial setup     | Automatic                            | `claude-mem cursor install` creates initial context |
+| MCP tool access   | ✅ Full support                       | ✅ Full support                                      |
+| Web viewer        | ✅ Available                          | ✅ Available                                         |
 
 ## First Session Behavior
 

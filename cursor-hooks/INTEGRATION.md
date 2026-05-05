@@ -131,23 +131,23 @@ session-summary.sh
 
 ### Session ID Mapping
 
-| Cursor Field | Claude-Mem Field | Notes |
-|-------------|------------------|-------|
+| Cursor Field      | Claude-Mem Field   | Notes                                                   |
+| ----------------- | ------------------ | ------------------------------------------------------- |
 | `conversation_id` | `contentSessionId` | Stable across turns, used as primary session identifier |
-| `generation_id` | (fallback) | Used if conversation_id unavailable |
+| `generation_id`   | (fallback)         | Used if conversation_id unavailable                     |
 
 ### Tool Mapping
 
-| Cursor Event | Claude-Mem Tool Name | Input Format |
-|-------------|---------------------|--------------|
-| `afterMCPExecution` | `tool_name` from event | `tool_input` as JSON |
-| `afterShellExecution` | `"Bash"` | `{command: "..."}` |
-| `afterFileEdit` | `"write_file"` | `{file_path: "...", edits: [...]}` |
+| Cursor Event          | Claude-Mem Tool Name   | Input Format                       |
+| --------------------- | ---------------------- | ---------------------------------- |
+| `afterMCPExecution`   | `tool_name` from event | `tool_input` as JSON               |
+| `afterShellExecution` | `"Bash"`               | `{command: "..."}`                 |
+| `afterFileEdit`       | `"write_file"`         | `{file_path: "...", edits: [...]}` |
 
 ### Project Mapping
 
-| Source | Target | Notes |
-|--------|--------|-------|
+| Source               | Target       | Notes                                |
+| -------------------- | ------------ | ------------------------------------ |
 | `workspace_roots[0]` | Project name | Basename of workspace root directory |
 
 ## API Endpoints Used

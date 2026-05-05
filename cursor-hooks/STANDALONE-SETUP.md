@@ -194,14 +194,14 @@ If you hit the 1500 requests/day limit:
 
 ## Quick Reference
 
-| Command | Purpose |
-|---------|---------|
+| Command                          | Purpose                                      |
+| -------------------------------- | -------------------------------------------- |
 | `bun run cursor:install -- user` | Install hooks for all projects (recommended) |
-| `bun run cursor:install` | Install hooks for current project only |
-| `bun run cursor:status` | Check installation status |
-| `bun run worker:start` | Start the background worker |
-| `bun run worker:stop` | Stop the background worker |
-| `bun run worker:restart` | Restart the worker |
+| `bun run cursor:install`         | Install hooks for current project only       |
+| `bun run cursor:status`          | Check installation status                    |
+| `bun run worker:start`           | Start the background worker                  |
+| `bun run worker:stop`            | Stop the background worker                   |
+| `bun run worker:restart`         | Restart the worker                           |
 
 ---
 
@@ -249,14 +249,14 @@ bun run worker:start
 
 The installer copies these PowerShell scripts to `.cursor\hooks\`:
 
-| Script | Purpose |
-|--------|---------|
-| `common.ps1` | Shared utilities |
-| `session-init.ps1` | Initialize session on prompt |
-| `context-inject.ps1` | Inject memory context |
-| `save-observation.ps1` | Capture MCP/shell usage |
-| `save-file-edit.ps1` | Capture file edits |
-| `session-summary.ps1` | Generate summary on stop |
+| Script                 | Purpose                      |
+| ---------------------- | ---------------------------- |
+| `common.ps1`           | Shared utilities             |
+| `session-init.ps1`     | Initialize session on prompt |
+| `context-inject.ps1`   | Inject memory context        |
+| `save-observation.ps1` | Capture MCP/shell usage      |
+| `save-file-edit.ps1`   | Capture file edits           |
+| `session-summary.ps1`  | Generate summary on stop     |
 
 The `hooks.json` file is configured to invoke PowerShell with `-ExecutionPolicy Bypass` to ensure scripts run without additional configuration.
 

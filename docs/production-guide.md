@@ -4,25 +4,25 @@ Practical guide based on 23 days of production usage with 3,400+ observations ac
 
 ## Recommended Settings
 
-| Setting | Default | Recommended | Why |
-|---------|---------|-------------|-----|
-| CLAUDE_MEM_MAX_CONCURRENT_AGENTS | 2 | 3 | Better throughput without overload |
-| CLAUDE_MEM_SEMANTIC_INJECT | true | true | Relevant context >> recent context |
-| CLAUDE_MEM_SEMANTIC_INJECT_LIMIT | 5 | 5 | Sweet spot for token cost vs coverage |
-| CLAUDE_MEM_TIER_ROUTING_ENABLED | true | true | ~52% cost savings, no quality loss |
+| Setting                          | Default | Recommended | Why                                   |
+| -------------------------------- | ------- | ----------- | ------------------------------------- |
+| CLAUDE_MEM_MAX_CONCURRENT_AGENTS | 2       | 3           | Better throughput without overload    |
+| CLAUDE_MEM_SEMANTIC_INJECT       | true    | true        | Relevant context >> recent context    |
+| CLAUDE_MEM_SEMANTIC_INJECT_LIMIT | 5       | 5           | Sweet spot for token cost vs coverage |
+| CLAUDE_MEM_TIER_ROUTING_ENABLED  | true    | true        | ~52% cost savings, no quality loss    |
 
 ## Health Monitoring
 
 ### Key metrics to watch
 
-| Metric | Healthy | Warning | Action |
-|--------|---------|---------|--------|
-| pending_messages (pending) | 0-5 | >10 | Check worker logs, may need restart |
-| pending_messages (failed) | 0 | >0 growing | Circuit-breaker may be tripping |
-| sdk_sessions (active) | 0-3 | >5 stuck | Orphan sessions, worker restart |
-| WAL size | <10 MB | >20 MB | Run `PRAGMA wal_checkpoint(TRUNCATE)` |
-| Chroma size | Growing slowly | Sudden jump | Check for sync loops |
-| Errors/day in logs | 0-2 | >10 | Investigate log patterns |
+| Metric                     | Healthy        | Warning     | Action                                |
+| -------------------------- | -------------- | ----------- | ------------------------------------- |
+| pending_messages (pending) | 0-5            | >10         | Check worker logs, may need restart   |
+| pending_messages (failed)  | 0              | >0 growing  | Circuit-breaker may be tripping       |
+| sdk_sessions (active)      | 0-3            | >5 stuck    | Orphan sessions, worker restart       |
+| WAL size                   | <10 MB         | >20 MB      | Run `PRAGMA wal_checkpoint(TRUNCATE)` |
+| Chroma size                | Growing slowly | Sudden jump | Check for sync loops                  |
+| Errors/day in logs         | 0-2            | >10         | Investigate log patterns              |
 
 ### Quick health check
 
@@ -56,12 +56,12 @@ Deduplication is by `(created_at, title)` — safe to run repeatedly.
 
 Based on active daily development usage:
 
-| Metric | Per day | Per month | Notes |
-|--------|---------|-----------|-------|
-| Observations | ~120 | ~3,600 | Varies with coding activity |
-| Summaries | ~40 | ~1,200 | One per session |
-| SQLite | ~0.8 MB | ~24 MB | ~5 KB per observation |
-| Chroma | ~4 MB | ~120 MB | ~50 KB per observation (embeddings) |
+| Metric       | Per day | Per month | Notes                               |
+| ------------ | ------- | --------- | ----------------------------------- |
+| Observations | ~120    | ~3,600    | Varies with coding activity         |
+| Summaries    | ~40     | ~1,200    | One per session                     |
+| SQLite       | ~0.8 MB | ~24 MB    | ~5 KB per observation               |
+| Chroma       | ~4 MB   | ~120 MB   | ~50 KB per observation (embeddings) |
 
 ## Common Issues and Solutions
 

@@ -331,11 +331,11 @@ ls ~/.claude/plugins/marketplaces/thedotmack/plugin/modes/
 
 #### Available Modes
 
-| Mode | Description |
-|------------|-------------------------|
-| `code` | Default English mode |
+| Mode       | Description             |
+| ---------- | ----------------------- |
+| `code`     | Default English mode    |
 | `code--zh` | Simplified Chinese mode |
-| `code--ja` | Japanese mode |
+| `code--ja` | Japanese mode           |
 
 Language-specific modes follow the pattern `code--[lang]` where `[lang]` is the ISO 639-1 language code (e.g., `zh` for Chinese, `ja` for Japanese, `es` for Spanish).
 

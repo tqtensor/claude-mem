@@ -28,15 +28,15 @@ RAGTIME_FILE_LIMIT=5 bun ragtime/ragtime.ts
 
 ## Configuration
 
-| Environment Variable | Default | Description |
-|---------------------|---------|-------------|
-| `RAGTIME_CORPUS_PATH` | `./datasets/epstein-mode` | Path to folder containing .md email files |
-| `RAGTIME_PLUGIN_PATH` | `./plugin` | Path to claude-mem plugin |
-| `CLAUDE_MEM_WORKER_PORT` | `37777` | Worker service port |
-| `RAGTIME_TRANSCRIPT_MAX_AGE` | `24` | Max age of transcripts to keep (hours) |
-| `RAGTIME_PROJECT_NAME` | `ragtime-investigation` | Project name for grouping |
-| `RAGTIME_FILE_LIMIT` | `0` | Limit files to process (0 = all) |
-| `RAGTIME_SESSION_DELAY` | `2000` | Delay between sessions (ms) |
+| Environment Variable         | Default                   | Description                               |
+| ---------------------------- | ------------------------- | ----------------------------------------- |
+| `RAGTIME_CORPUS_PATH`        | `./datasets/epstein-mode` | Path to folder containing .md email files |
+| `RAGTIME_PLUGIN_PATH`        | `./plugin`                | Path to claude-mem plugin                 |
+| `CLAUDE_MEM_WORKER_PORT`     | `37777`                   | Worker service port                       |
+| `RAGTIME_TRANSCRIPT_MAX_AGE` | `24`                      | Max age of transcripts to keep (hours)    |
+| `RAGTIME_PROJECT_NAME`       | `ragtime-investigation`   | Project name for grouping                 |
+| `RAGTIME_FILE_LIMIT`         | `0`                       | Limit files to process (0 = all)          |
+| `RAGTIME_SESSION_DELAY`      | `2000`                    | Delay between sessions (ms)               |
 
 ## Corpus Format
 

@@ -203,35 +203,35 @@ We partner with ecosystem vendors who have built hooks support with Cursor. Thes
 
 ### MCP governance and visibility
 
-| Partner | Description |
-|---------|-------------|
-| [MintMCP](https://www.mintmcp.com/blog/mcp-governance-cursor-hooks) | Build a complete inventory of MCP servers, monitor tool usage patterns, and scan responses for sensitive data before it reaches the AI model. |
-| [Oasis Security](https://www.oasis.security/blog/cursor-oasis-governing-agentic-access) | Enforce least-privilege policies on AI agent actions and maintain full audit trails across enterprise systems. |
-| [Runlayer](https://www.runlayer.com/blog/cursor-hooks) | Wrap MCP tools and integrate with their MCP broker for centralized control and visibility over agent-to-tool interactions. |
+| Partner                                                                                 | Description                                                                                                                                   |
+| --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MintMCP](https://www.mintmcp.com/blog/mcp-governance-cursor-hooks)                     | Build a complete inventory of MCP servers, monitor tool usage patterns, and scan responses for sensitive data before it reaches the AI model. |
+| [Oasis Security](https://www.oasis.security/blog/cursor-oasis-governing-agentic-access) | Enforce least-privilege policies on AI agent actions and maintain full audit trails across enterprise systems.                                |
+| [Runlayer](https://www.runlayer.com/blog/cursor-hooks)                                  | Wrap MCP tools and integrate with their MCP broker for centralized control and visibility over agent-to-tool interactions.                    |
 
 ### Code security and best practices
 
-| Partner | Description |
-|---------|-------------|
-| [Corridor](https://corridor.dev/blog/corridor-cursor-hooks/) | Get real-time feedback on code implementation and security design decisions as code is being written. |
+| Partner                                                          | Description                                                                                                                             |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| [Corridor](https://corridor.dev/blog/corridor-cursor-hooks/)     | Get real-time feedback on code implementation and security design decisions as code is being written.                                   |
 | [Semgrep](https://semgrep.dev/blog/2025/cursor-hooks-mcp-server) | Automatically scan AI-generated code for vulnerabilities with real-time feedback to regenerate code until security issues are resolved. |
 
 ### Dependency security
 
-| Partner | Description |
-|---------|-------------|
+| Partner                                                                                                             | Description                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | [Endor Labs](https://www.endorlabs.com/learn/bringing-malware-detection-into-ai-coding-workflows-with-cursor-hooks) | Intercept package installations and scan for malicious dependencies, preventing supply chain attacks before they enter your codebase. |
 
 ### Agent security and safety
 
-| Partner | Description |
-|---------|-------------|
+| Partner                                                          | Description                                                                                                                             |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | [Snyk](https://snyk.io/blog/evo-agent-guard-cursor-integration/) | Review agent actions in real-time with Evo Agent Guard, detecting and preventing issues like prompt injection and dangerous tool calls. |
 
 ### Secrets management
 
-| Partner | Description |
-|---------|-------------|
+| Partner                                                                 | Description                                                                                                                                                                               |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [1Password](https://marketplace.1password.com/integration/cursor-hooks) | Validate that environment files from 1Password Environments are properly mounted before shell commands execute, enabling just-in-time secrets access without writing credentials to disk. |
 
 For more details about our hooks partners, see the [Hooks for security and platform teams](/blog/hooks-partners) blog post.
@@ -341,15 +341,15 @@ All hooks receive a base set of fields in addition to their hook-specific fields
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `conversation_id` | string | Stable ID of the conversation across many turns |
-| `generation_id` | string | The current generation that changes with every user message |
-| `model` | string | The model configured for the composer that triggered the hook |
-| `hook_event_name` | string | Which hook is being run |
-| `cursor_version` | string | Cursor application version (e.g. "1.7.2") |
-| `workspace_roots` | string[] | The list of root folders in the workspace (normally just one, but multiroot workspaces can have multiple) |
-| `user_email` | string \| null | Email address of the authenticated user, if available |
+| Field             | Type           | Description                                                                                               |
+| ----------------- | -------------- | --------------------------------------------------------------------------------------------------------- |
+| `conversation_id` | string         | Stable ID of the conversation across many turns                                                           |
+| `generation_id`   | string         | The current generation that changes with every user message                                               |
+| `model`           | string         | The model configured for the composer that triggered the hook                                             |
+| `hook_event_name` | string         | Which hook is being run                                                                                   |
+| `cursor_version`  | string         | Cursor application version (e.g. "1.7.2")                                                                 |
+| `workspace_roots` | string[]       | The list of root folders in the workspace (normally just one, but multiroot workspaces can have multiple) |
+| `user_email`      | string \| null | Email address of the authenticated user, if available                                                     |
 
 ### Hook events
 
@@ -395,10 +395,10 @@ Fires after a shell command executes; useful for auditing or collecting metrics 
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `command` | string | The full terminal command that was executed |
-| `output` | string | Full output captured from the terminal |
+| Field      | Type   | Description                                                                              |
+| ---------- | ------ | ---------------------------------------------------------------------------------------- |
+| `command`  | string | The full terminal command that was executed                                              |
+| `output`   | string | Full output captured from the terminal                                                   |
 | `duration` | number | Duration in milliseconds spent executing the shell command (excludes approval wait time) |
 
 #### afterMCPExecution
@@ -415,12 +415,12 @@ Fires after an MCP tool executes; includes the tool's input parameters and full 
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `tool_name` | string | Name of the MCP tool that was executed |
-| `tool_input` | string | JSON params string passed to the tool |
-| `result_json` | string | JSON string of the tool response |
-| `duration` | number | Duration in milliseconds spent executing the MCP tool (excludes approval wait time) |
+| Field         | Type   | Description                                                                         |
+| ------------- | ------ | ----------------------------------------------------------------------------------- |
+| `tool_name`   | string | Name of the MCP tool that was executed                                              |
+| `tool_input`  | string | JSON params string passed to the tool                                               |
+| `result_json` | string | JSON string of the tool response                                                    |
+| `duration`    | number | Duration in milliseconds spent executing the MCP tool (excludes approval wait time) |
 
 #### afterFileEdit
 
@@ -514,9 +514,9 @@ Called right after user hits send but before backend request. Can prevent submis
 }
 ```
 
-| Output Field | Type | Description |
-|--------------|------|-------------|
-| `continue` | boolean | Whether to allow the prompt submission to proceed |
+| Output Field   | Type              | Description                                          |
+| -------------- | ----------------- | ---------------------------------------------------- |
+| `continue`     | boolean           | Whether to allow the prompt submission to proceed    |
 | `user_message` | string (optional) | Message shown to the user when the prompt is blocked |
 
 #### afterAgentResponse
@@ -547,10 +547,10 @@ Called after the agent completes a thinking block. Useful for observing the agen
 }
 ```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `text` | string | Fully aggregated thinking text for the completed block |
-| `duration_ms` | number (optional) | Duration in milliseconds for the thinking block |
+| Field         | Type              | Description                                            |
+| ------------- | ----------------- | ------------------------------------------------------ |
+| `text`        | string            | Fully aggregated thinking text for the completed block |
+| `duration_ms` | number (optional) | Duration in milliseconds for the thinking block        |
 
 #### stop
 

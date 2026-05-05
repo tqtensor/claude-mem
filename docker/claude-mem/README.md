@@ -7,12 +7,12 @@ afterwards.
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `Dockerfile` | Image definition (node:20 + Bun + uv + Claude Code CLI + local `plugin/`) |
-| `build.sh` | Runs `npm run build` then `docker build`. Tag defaults to `claude-mem:basic`. |
-| `entrypoint.sh` | Runs inside the container. Seeds OAuth creds into `$HOME/.claude/` if mounted, then `exec "$@"`. |
-| `run.sh` | Host-side launcher. Extracts creds (Keychain → file → env), mounts a persistent data dir, drops you into an interactive shell. |
+| File            | Purpose                                                                                                                        |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Dockerfile`    | Image definition (node:20 + Bun + uv + Claude Code CLI + local `plugin/`)                                                      |
+| `build.sh`      | Runs `npm run build` then `docker build`. Tag defaults to `claude-mem:basic`.                                                  |
+| `entrypoint.sh` | Runs inside the container. Seeds OAuth creds into `$HOME/.claude/` if mounted, then `exec "$@"`.                               |
+| `run.sh`        | Host-side launcher. Extracts creds (Keychain → file → env), mounts a persistent data dir, drops you into an interactive shell. |
 
 ## Quick start
 
@@ -67,11 +67,11 @@ docker build \
   -t claude-mem:basic .
 ```
 
-| Arg | Default | Notes |
-|-----|---------|-------|
-| `BUN_VERSION` | `1.3.12` | Installed via the official `bun.sh/install` script, tag `bun-v${BUN_VERSION}`. |
-| `UV_VERSION` | `0.11.7` | Installed via the versioned `astral.sh/uv/${UV_VERSION}/install.sh`. |
-| `CLAUDE_CODE_VERSION` | `latest` | npm tag or exact version. Pin in CI, let it float locally. |
+| Arg                   | Default  | Notes                                                                          |
+| --------------------- | -------- | ------------------------------------------------------------------------------ |
+| `BUN_VERSION`         | `1.3.12` | Installed via the official `bun.sh/install` script, tag `bun-v${BUN_VERSION}`. |
+| `UV_VERSION`          | `0.11.7` | Installed via the versioned `astral.sh/uv/${UV_VERSION}/install.sh`.           |
+| `CLAUDE_CODE_VERSION` | `latest` | npm tag or exact version. Pin in CI, let it float locally.                     |
 
 ## Authentication
 
@@ -112,12 +112,12 @@ docker run --rm -it \
 
 ## Environment variables
 
-| Var | Where | Purpose |
-|-----|-------|---------|
-| `TAG` | `build.sh`, `run.sh` | Override image tag (default `claude-mem:basic`). |
-| `HOST_MEM_DIR` | `run.sh` | Override host path for the persistent `.claude-mem` volume (default `$REPO_ROOT/.docker-claude-mem-data`). |
-| `ANTHROPIC_API_KEY` | `run.sh`, entrypoint | API-key auth. Skips the OAuth creds extraction. |
-| `CLAUDE_MEM_CREDENTIALS_FILE` | entrypoint | Path (inside the container) to a mounted OAuth creds JSON. Copied to `$HOME/.claude/.credentials.json` at startup. |
+| Var                           | Where                | Purpose                                                                                                            |
+| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `TAG`                         | `build.sh`, `run.sh` | Override image tag (default `claude-mem:basic`).                                                                   |
+| `HOST_MEM_DIR`                | `run.sh`             | Override host path for the persistent `.claude-mem` volume (default `$REPO_ROOT/.docker-claude-mem-data`).         |
+| `ANTHROPIC_API_KEY`           | `run.sh`, entrypoint | API-key auth. Skips the OAuth creds extraction.                                                                    |
+| `CLAUDE_MEM_CREDENTIALS_FILE` | entrypoint           | Path (inside the container) to a mounted OAuth creds JSON. Copied to `$HOME/.claude/.credentials.json` at startup. |
 
 ## Passing args through
 

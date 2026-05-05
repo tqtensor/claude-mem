@@ -15,10 +15,10 @@ Claude-mem uses **two distinct session IDs** to track conversations and memory:
 ┌─────────────────────────────────────────────────────────────┐
 │ 1. Hook creates session                                     │
 │    createSDKSession(contentSessionId, project, prompt)      │
-│                                                              │
+│                                                             │
 │    Database state:                                          │
-│    ├─ content_session_id: "user-session-123"               │
-│    └─ memory_session_id: NULL (not yet captured)           │
+│    ├─ content_session_id: "user-session-123"                │
+│    └─ memory_session_id: NULL (not yet captured)            │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
@@ -30,16 +30,17 @@ Claude-mem uses **two distinct session IDs** to track conversations and memory:
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ 3. First SDK message arrives with session_id                │
-│    ensureMemorySessionIdRegistered(sessionDbId, "sdk-gen-abc123") │
-│                                                              │
+│    ensureMemorySessionIdRegistered(sessionDbId,             │
+│    "sdk-gen-abc123")                                        │
+│                                                             │
 │    Database state:                                          │
-│    ├─ content_session_id: "user-session-123"               │
-│    └─ memory_session_id: "sdk-gen-abc123" (real!)          │
+│    ├─ content_session_id: "user-session-123"                │
+│    └─ memory_session_id: "sdk-gen-abc123" (real!)           │
 └─────────────────────────────────────────────────────────────┘
                            ↓
 ┌─────────────────────────────────────────────────────────────┐
 │ 4. Subsequent prompts may use resume                        │
-│    const shouldResume =                                      │
+│    const shouldResume =                                     │
 │      !!memorySessionId && lastPromptNumber > 1 && !forceInit│
 │    → TRUE only for continuation prompts in the same runtime │
 │    → Resume parameter: { resume: "sdk-gen-abc123" }         │

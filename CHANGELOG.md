@@ -1235,12 +1235,12 @@ The standard exploration cycle (Glob → Grep → Read) forces agents to consume
 
 ### Token Economics
 
-| Approach | Tokens | Savings |
-|----------|--------|---------|
-| smart_outline + smart_unfold | ~3,100 | 8x vs Read |
-| smart_search (cross-file) | ~2,000-6,000 | 6-12x vs Explore agent |
-| Read (full file) | ~12,000+ | baseline |
-| Explore agent | ~20,000-40,000 | baseline |
+| Approach                     | Tokens         | Savings                |
+| ---------------------------- | -------------- | ---------------------- |
+| smart_outline + smart_unfold | ~3,100         | 8x vs Read             |
+| smart_search (cross-file)    | ~2,000-6,000   | 6-12x vs Explore agent |
+| Read (full file)             | ~12,000+       | baseline               |
+| Explore agent                | ~20,000-40,000 | baseline               |
 
 ### Language Support
 
@@ -1653,13 +1653,13 @@ Fixes a critical bug where killing the worker daemon during active sessions caus
 
 ### 5-Layer Defense
 
-| Layer | Mechanism | Purpose |
-|-------|-----------|---------|
-| **0** | Connection mutex via promise memoization | Coalesces concurrent callers onto a single spawn attempt |
-| **1** | Pre-spawn process count guard (`execFileSync('ps')`) | Kills excess chroma-mcp processes before spawning new ones |
-| **2** | Hardened `close()` with try-finally + Unix `pkill -P` fallback | Guarantees state reset even on error, kills orphaned children |
-| **3** | Count-based orphan reaper in `ProcessManager` | Kills by count (not age), catches spawn storms where all processes are young |
-| **4** | Circuit breaker (3 failures → 60s cooldown) | Stops error-driven reconnection positive feedback loop |
+| Layer | Mechanism                                                      | Purpose                                                                      |
+| ----- | -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **0** | Connection mutex via promise memoization                       | Coalesces concurrent callers onto a single spawn attempt                     |
+| **1** | Pre-spawn process count guard (`execFileSync('ps')`)           | Kills excess chroma-mcp processes before spawning new ones                   |
+| **2** | Hardened `close()` with try-finally + Unix `pkill -P` fallback | Guarantees state reset even on error, kills orphaned children                |
+| **3** | Count-based orphan reaper in `ProcessManager`                  | Kills by count (not age), catches spawn storms where all processes are young |
+| **4** | Circuit breaker (3 failures → 60s cooldown)                    | Stops error-driven reconnection positive feedback loop                       |
 
 ### Additional Fix
 
@@ -2392,7 +2392,7 @@ This release refactors the monolithic service architecture into focused, single-
 ### Session ID Refactor
 
 - Aligned tests with NULL-based memory session initialization pattern
-- Updated `SESSION_ID_ARCHITECTURE.md` documentation
+- Updated `session-id-architecture.md` documentation
 
 ### Other Improvements
 
@@ -2594,7 +2594,7 @@ Logs viewer accessible via floating console button in UI.
 
 ## 📚 Architecture Documentation
 
-**Session ID Architecture** (`docs/SESSION_ID_ARCHITECTURE.md`)
+**Session ID Architecture** (`docs/session-id-architecture.md`)
 - Comprehensive documentation of 1:1 session mapping guarantees
 - 19 validation tests proving UNIQUE constraints and resume consistency
 - Documents single-transition vulnerability (application-level enforcement)
@@ -2737,12 +2737,12 @@ Full MCP server integration for Cursor:
 
 ## New Commands
 
-| Command | Description |
-|---------|-------------|
-| `bun run cursor:setup` | Interactive setup wizard |
-| `bun run cursor:install` | Install Cursor hooks |
-| `bun run cursor:uninstall` | Remove Cursor hooks |
-| `bun run cursor:status` | Check hook installation status |
+| Command                    | Description                    |
+| -------------------------- | ------------------------------ |
+| `bun run cursor:setup`     | Interactive setup wizard       |
+| `bun run cursor:install`   | Install Cursor hooks           |
+| `bun run cursor:uninstall` | Remove Cursor hooks            |
+| `bun run cursor:status`    | Check hook installation status |
 
 ## Documentation
 
@@ -2931,17 +2931,17 @@ All hooks now use `worker-service.cjs` CLI directly instead of the deleted `work
 
 Increased timeouts throughout for compatibility with slow systems:
 
-| Component | Before | After |
-|-----------|--------|-------|
-| Default hook timeout | 120s | 300s |
-| Health check timeout | 1s | 30s |
-| Health check retries | 15 | 300 |
-| Context initialization | 30s | 300s |
-| MCP connection | 15s | 300s |
-| PowerShell commands | 5s | 60s |
-| Git commands | 30s | 300s |
-| NPM install | 120s | 600s |
-| Hook worker commands | 30s | 180s |
+| Component              | Before | After |
+| ---------------------- | ------ | ----- |
+| Default hook timeout   | 120s   | 300s  |
+| Health check timeout   | 1s     | 30s   |
+| Health check retries   | 15     | 300   |
+| Context initialization | 30s    | 300s  |
+| MCP connection         | 15s    | 300s  |
+| PowerShell commands    | 5s     | 60s   |
+| Git commands           | 30s    | 300s  |
+| NPM install            | 120s   | 600s  |
+| Hook worker commands   | 30s    | 180s  |
 
 ### 🧪 Testing
 
@@ -3001,12 +3001,12 @@ This release introduces **Google Gemini API** as an alternative to the Claude Ag
 
 ### ⚙️ New Settings
 
-| Setting | Values | Description |
-|---------|--------|-------------|
-| `CLAUDE_MEM_PROVIDER` | `claude` \| `gemini` | AI provider for observation extraction |
-| `CLAUDE_MEM_GEMINI_API_KEY` | string | Gemini API key |
-| `CLAUDE_MEM_GEMINI_MODEL` | see above | Gemini model to use |
-| `gemini_has_billing` | boolean | Enable higher rate limits for paid accounts |
+| Setting                     | Values               | Description                                 |
+| --------------------------- | -------------------- | ------------------------------------------- |
+| `CLAUDE_MEM_PROVIDER`       | `claude` \| `gemini` | AI provider for observation extraction      |
+| `CLAUDE_MEM_GEMINI_API_KEY` | string               | Gemini API key                              |
+| `CLAUDE_MEM_GEMINI_MODEL`   | see above            | Gemini model to use                         |
+| `gemini_has_billing`        | boolean              | Enable higher rate limits for paid accounts |
 
 ---
 
@@ -3046,12 +3046,12 @@ But the edge cases didn't exist. Hooks ALWAYS provide session IDs. The "defensiv
 
 Every time a bug appeared, Claude's instinct was to **ADD** more code:
 
-| Bug | What Claude Added | What Should Have Happened |
-|-----|------------------|--------------------------|
-| Race conditions | Auto-create fallbacks | Delete the auto-create logic |
-| Duplicate observations | Validation layers | Delete the code path allowing duplicates |
-| UNIQUE constraint violations | Try-catch with fallbacks | Use `INSERT OR IGNORE` (5 characters) |
-| Session not found | Silent auto-creation | **FAIL LOUDLY** (it's a hook bug) |
+| Bug                          | What Claude Added        | What Should Have Happened                |
+| ---------------------------- | ------------------------ | ---------------------------------------- |
+| Race conditions              | Auto-create fallbacks    | Delete the auto-create logic             |
+| Duplicate observations       | Validation layers        | Delete the code path allowing duplicates |
+| UNIQUE constraint violations | Try-catch with fallbacks | Use `INSERT OR IGNORE` (5 characters)    |
+| Session not found            | Silent auto-creation     | **FAIL LOUDLY** (it's a hook bug)        |
 
 ---
 

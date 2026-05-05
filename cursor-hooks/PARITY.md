@@ -4,38 +4,38 @@ This document compares claude-mem's Claude Code hooks with the Cursor hooks impl
 
 ## Hook Mapping
 
-| Claude Code Hook | Cursor Hook | Status | Notes |
-|-----------------|-------------|--------|-------|
-| `SessionStart` → `context-hook.js` | `beforeSubmitPrompt` → `context-inject.sh` | ✅ Partial | Context fetched but not injectable in Cursor |
-| `SessionStart` → `user-message-hook.js` | (Optional) `user-message.sh` | ⚠️ Optional | No SessionStart equivalent; can run on beforeSubmitPrompt |
-| `UserPromptSubmit` → `new-hook.js` | `beforeSubmitPrompt` → `session-init.sh` | ✅ Complete | Session init, privacy checks, slash stripping |
-| `PostToolUse` → `save-hook.js` | `afterMCPExecution` + `afterShellExecution` → `save-observation.sh` | ✅ Complete | Tool observation capture |
-| `PostToolUse` → (file edits) | `afterFileEdit` → `save-file-edit.sh` | ✅ Complete | File edit observation capture |
-| `Stop` → `summary-hook.js` | `stop` → `session-summary.sh` | ⚠️ Partial | Summary generation (no transcript access) |
+| Claude Code Hook                        | Cursor Hook                                                         | Status     | Notes                                                     |
+| --------------------------------------- | ------------------------------------------------------------------- | ---------- | --------------------------------------------------------- |
+| `SessionStart` → `context-hook.js`      | `beforeSubmitPrompt` → `context-inject.sh`                          | ✅ Partial  | Context fetched but not injectable in Cursor              |
+| `SessionStart` → `user-message-hook.js` | (Optional) `user-message.sh`                                        | ⚠️ Optional | No SessionStart equivalent; can run on beforeSubmitPrompt |
+| `UserPromptSubmit` → `new-hook.js`      | `beforeSubmitPrompt` → `session-init.sh`                            | ✅ Complete | Session init, privacy checks, slash stripping             |
+| `PostToolUse` → `save-hook.js`          | `afterMCPExecution` + `afterShellExecution` → `save-observation.sh` | ✅ Complete | Tool observation capture                                  |
+| `PostToolUse` → (file edits)            | `afterFileEdit` → `save-file-edit.sh`                               | ✅ Complete | File edit observation capture                             |
+| `Stop` → `summary-hook.js`              | `stop` → `session-summary.sh`                                       | ⚠️ Partial  | Summary generation (no transcript access)                 |
 
 ## Feature Comparison
 
 ### 1. Session Initialization (`new-hook.js` ↔ `session-init.sh`)
 
-| Feature | Claude Code | Cursor | Status |
-|---------|-------------|--------|--------|
-| Worker health check | ✅ 75 retries (15s) | ✅ 75 retries (15s) | ✅ Match |
-| Session init API call | ✅ `/api/sessions/init` | ✅ `/api/sessions/init` | ✅ Match |
-| Privacy check handling | ✅ Checks `skipped` + `reason` | ✅ Checks `skipped` + `reason` | ✅ Match |
-| Slash stripping | ✅ Strips leading `/` | ✅ Strips leading `/` | ✅ Match |
-| SDK agent init | ✅ `/sessions/{id}/init` | ❌ Not needed | ✅ N/A (Cursor-specific) |
+| Feature                | Claude Code                   | Cursor                        | Status                  |
+| ---------------------- | ----------------------------- | ----------------------------- | ----------------------- |
+| Worker health check    | ✅ 75 retries (15s)            | ✅ 75 retries (15s)            | ✅ Match                 |
+| Session init API call  | ✅ `/api/sessions/init`        | ✅ `/api/sessions/init`        | ✅ Match                 |
+| Privacy check handling | ✅ Checks `skipped` + `reason` | ✅ Checks `skipped` + `reason` | ✅ Match                 |
+| Slash stripping        | ✅ Strips leading `/`          | ✅ Strips leading `/`          | ✅ Match                 |
+| SDK agent init         | ✅ `/sessions/{id}/init`       | ❌ Not needed                  | ✅ N/A (Cursor-specific) |
 
 **Status**: ✅ Complete parity (SDK agent init not applicable to Cursor)
 
 ### 2. Context Injection (`context-hook.js` ↔ `context-inject.sh`)
 
-| Feature | Claude Code | Cursor | Status |
-|---------|-------------|--------|--------|
-| Worker health check | ✅ 75 retries | ✅ 75 retries | ✅ Match |
-| Context fetch | ✅ `/api/context/inject` | ✅ `/api/context/inject` | ✅ Match |
-| Output format | ✅ JSON with `hookSpecificOutput` | ✅ Write to `.cursor/rules/` file | ✅ Alternative |
-| Project name extraction | ✅ `getProjectName(cwd)` | ✅ `basename(workspace_root)` | ✅ Match |
-| Auto-refresh | ✅ Each session start | ✅ Each prompt submission | ✅ Enhanced |
+| Feature                 | Claude Code                      | Cursor                           | Status        |
+| ----------------------- | -------------------------------- | -------------------------------- | ------------- |
+| Worker health check     | ✅ 75 retries                     | ✅ 75 retries                     | ✅ Match       |
+| Context fetch           | ✅ `/api/context/inject`          | ✅ `/api/context/inject`          | ✅ Match       |
+| Output format           | ✅ JSON with `hookSpecificOutput` | ✅ Write to `.cursor/rules/` file | ✅ Alternative |
+| Project name extraction | ✅ `getProjectName(cwd)`          | ✅ `basename(workspace_root)`     | ✅ Match       |
+| Auto-refresh            | ✅ Each session start             | ✅ Each prompt submission         | ✅ Enhanced    |
 
 **Status**: ✅ Complete parity via auto-updated rules file
 
@@ -47,12 +47,12 @@ This document compares claude-mem's Claude Code hooks with the Cursor hooks impl
 
 ### 3. User Message Display (`user-message-hook.js` ↔ `user-message.sh`)
 
-| Feature | Claude Code | Cursor | Status |
-|---------|-------------|--------|--------|
-| Context fetch with colors | ✅ `/api/context/inject?colors=true` | ✅ `/api/context/inject?colors=true` | ✅ Match |
-| Output channel | ✅ stderr | ✅ stderr | ✅ Match |
-| Display format | ✅ Formatted with emojis | ✅ Formatted with emojis | ✅ Match |
-| Hook trigger | ✅ SessionStart | ⚠️ Optional (no SessionStart) | ⚠️ Cursor limitation |
+| Feature                   | Claude Code                         | Cursor                              | Status              |
+| ------------------------- | ----------------------------------- | ----------------------------------- | ------------------- |
+| Context fetch with colors | ✅ `/api/context/inject?colors=true` | ✅ `/api/context/inject?colors=true` | ✅ Match             |
+| Output channel            | ✅ stderr                            | ✅ stderr                            | ✅ Match             |
+| Display format            | ✅ Formatted with emojis             | ✅ Formatted with emojis             | ✅ Match             |
+| Hook trigger              | ✅ SessionStart                      | ⚠️ Optional (no SessionStart)        | ⚠️ Cursor limitation |
 
 **Status**: ⚠️ Optional (no SessionStart equivalent in Cursor)
 
@@ -60,38 +60,38 @@ This document compares claude-mem's Claude Code hooks with the Cursor hooks impl
 
 ### 4. Observation Capture (`save-hook.js` ↔ `save-observation.sh`)
 
-| Feature | Claude Code | Cursor | Status |
-|---------|-------------|--------|--------|
-| Worker health check | ✅ 75 retries | ✅ 75 retries | ✅ Match |
-| Tool name extraction | ✅ From `tool_name` | ✅ From `tool_name` or "Bash" | ✅ Match |
-| Tool input capture | ✅ Full JSON | ✅ Full JSON | ✅ Match |
-| Tool response capture | ✅ Full JSON | ✅ Full JSON or output | ✅ Match |
-| Privacy tag stripping | ✅ Worker handles | ✅ Worker handles | ✅ Match |
-| Error handling | ✅ Fire-and-forget | ✅ Fire-and-forget | ✅ Match |
-| Shell command mapping | ✅ N/A (separate hook) | ✅ Maps to "Bash" tool | ✅ Enhanced |
+| Feature               | Claude Code           | Cursor                       | Status     |
+| --------------------- | --------------------- | ---------------------------- | ---------- |
+| Worker health check   | ✅ 75 retries          | ✅ 75 retries                 | ✅ Match    |
+| Tool name extraction  | ✅ From `tool_name`    | ✅ From `tool_name` or "Bash" | ✅ Match    |
+| Tool input capture    | ✅ Full JSON           | ✅ Full JSON                  | ✅ Match    |
+| Tool response capture | ✅ Full JSON           | ✅ Full JSON or output        | ✅ Match    |
+| Privacy tag stripping | ✅ Worker handles      | ✅ Worker handles             | ✅ Match    |
+| Error handling        | ✅ Fire-and-forget     | ✅ Fire-and-forget            | ✅ Match    |
+| Shell command mapping | ✅ N/A (separate hook) | ✅ Maps to "Bash" tool        | ✅ Enhanced |
 
 **Status**: ✅ Complete parity (enhanced with shell command support)
 
 ### 5. File Edit Capture (N/A ↔ `save-file-edit.sh`)
 
-| Feature | Claude Code | Cursor | Status |
-|---------|-------------|--------|--------|
-| File path extraction | N/A | ✅ From `file_path` | ✅ New |
-| Edit details | N/A | ✅ From `edits` array | ✅ New |
-| Tool name | N/A | ✅ "write_file" | ✅ New |
-| Edit summary | N/A | ✅ Generated from edits | ✅ New |
+| Feature              | Claude Code | Cursor                 | Status |
+| -------------------- | ----------- | ---------------------- | ------ |
+| File path extraction | N/A         | ✅ From `file_path`     | ✅ New  |
+| Edit details         | N/A         | ✅ From `edits` array   | ✅ New  |
+| Tool name            | N/A         | ✅ "write_file"         | ✅ New  |
+| Edit summary         | N/A         | ✅ Generated from edits | ✅ New  |
 
 **Status**: ✅ New feature (Cursor-specific, not in Claude Code)
 
 ### 6. Session Summary (`summary-hook.js` ↔ `session-summary.sh`)
 
-| Feature | Claude Code | Cursor | Status |
-|---------|-------------|--------|--------|
-| Worker health check | ✅ 75 retries | ✅ 75 retries | ✅ Match |
-| Transcript parsing | ✅ Extracts last messages | ❌ No transcript access | ⚠️ Cursor limitation |
-| Summary API call | ✅ `/api/sessions/summarize` | ✅ `/api/sessions/summarize` | ✅ Match |
-| Last message extraction | ✅ From transcript | ❌ Empty strings | ⚠️ Cursor limitation |
-| Error handling | ✅ Fire-and-forget | ✅ Fire-and-forget | ✅ Match |
+| Feature                 | Claude Code                 | Cursor                      | Status              |
+| ----------------------- | --------------------------- | --------------------------- | ------------------- |
+| Worker health check     | ✅ 75 retries                | ✅ 75 retries                | ✅ Match             |
+| Transcript parsing      | ✅ Extracts last messages    | ❌ No transcript access      | ⚠️ Cursor limitation |
+| Summary API call        | ✅ `/api/sessions/summarize` | ✅ `/api/sessions/summarize` | ✅ Match             |
+| Last message extraction | ✅ From transcript           | ❌ Empty strings             | ⚠️ Cursor limitation |
+| Error handling          | ✅ Fire-and-forget           | ✅ Fire-and-forget           | ✅ Match             |
 
 **Status**: ⚠️ Partial parity (no transcript access in Cursor)
 
@@ -151,14 +151,14 @@ This document compares claude-mem's Claude Code hooks with the Cursor hooks impl
 
 ## Summary
 
-| Category | Status |
-|----------|--------|
-| Core Functionality | ✅ Complete parity |
-| Session Management | ✅ Complete parity |
-| Observation Capture | ✅ Complete parity (enhanced) |
-| Context Injection | ✅ Complete parity (via rules file) |
-| Summary Generation | ⚠️ Partial (no transcript) |
-| User Experience | ⚠️ Partial (no SessionStart) |
+| Category            | Status                             |
+| ------------------- | ---------------------------------- |
+| Core Functionality  | ✅ Complete parity                  |
+| Session Management  | ✅ Complete parity                  |
+| Observation Capture | ✅ Complete parity (enhanced)       |
+| Context Injection   | ✅ Complete parity (via rules file) |
+| Summary Generation  | ⚠️ Partial (no transcript)          |
+| User Experience     | ⚠️ Partial (no SessionStart)        |
 
 **Overall**: The Cursor hooks implementation achieves **full functional parity** with claude-mem's Claude Code hooks:
 - ✅ Session initialization

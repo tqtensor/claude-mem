@@ -36,17 +36,17 @@ translate-readme --list-languages
 
 ### CLI Options
 
-| Option | Description |
-|--------|-------------|
-| `-o, --output <dir>` | Output directory (default: same as source) |
+| Option                | Description                                           |
+| --------------------- | ----------------------------------------------------- |
+| `-o, --output <dir>`  | Output directory (default: same as source)            |
 | `-p, --pattern <pat>` | Output filename pattern (default: `README.{lang}.md`) |
-| `--no-preserve-code` | Translate code blocks too (not recommended) |
-| `-m, --model <model>` | Claude model to use (default: `sonnet`) |
-| `--max-budget <usd>` | Maximum budget in USD |
-| `--use-existing` | Use existing translation file as a reference |
-| `-v, --verbose` | Show detailed progress |
-| `-h, --help` | Show help message |
-| `--list-languages` | List all supported language codes |
+| `--no-preserve-code`  | Translate code blocks too (not recommended)           |
+| `-m, --model <model>` | Claude model to use (default: `sonnet`)               |
+| `--max-budget <usd>`  | Maximum budget in USD                                 |
+| `--use-existing`      | Use existing translation file as a reference          |
+| `-v, --verbose`       | Show detailed progress                                |
+| `-h, --help`          | Show help message                                     |
+| `--list-languages`    | List all supported language codes                     |
 
 ## Programmatic Usage
 
@@ -193,27 +193,27 @@ main();
 
 ## Supported Languages
 
-| Code | Language | Code | Language |
-|------|----------|------|----------|
-| `ar` | Arabic | `ko` | Korean |
-| `bg` | Bulgarian | `lt` | Lithuanian |
-| `cs` | Czech | `lv` | Latvian |
-| `da` | Danish | `nl` | Dutch |
-| `de` | German | `no` | Norwegian |
-| `el` | Greek | `pl` | Polish |
-| `es` | Spanish | `pt` | Portuguese |
-| `et` | Estonian | `pt-br` | Brazilian Portuguese |
-| `fi` | Finnish | `ro` | Romanian |
-| `fr` | French | `ru` | Russian |
-| `he` | Hebrew | `sk` | Slovak |
-| `hi` | Hindi | `sl` | Slovenian |
-| `hu` | Hungarian | `sv` | Swedish |
-| `id` | Indonesian | `th` | Thai |
-| `it` | Italian | `tr` | Turkish |
-| `ja` | Japanese | `uk` | Ukrainian |
-| | | `vi` | Vietnamese |
-| | | `zh` | Chinese (Simplified) |
-| | | `zh-tw` | Chinese (Traditional) |
+| Code | Language   | Code    | Language              |
+| ---- | ---------- | ------- | --------------------- |
+| `ar` | Arabic     | `ko`    | Korean                |
+| `bg` | Bulgarian  | `lt`    | Lithuanian            |
+| `cs` | Czech      | `lv`    | Latvian               |
+| `da` | Danish     | `nl`    | Dutch                 |
+| `de` | German     | `no`    | Norwegian             |
+| `el` | Greek      | `pl`    | Polish                |
+| `es` | Spanish    | `pt`    | Portuguese            |
+| `et` | Estonian   | `pt-br` | Brazilian Portuguese  |
+| `fi` | Finnish    | `ro`    | Romanian              |
+| `fr` | French     | `ru`    | Russian               |
+| `he` | Hebrew     | `sk`    | Slovak                |
+| `hi` | Hindi      | `sl`    | Slovenian             |
+| `hu` | Hungarian  | `sv`    | Swedish               |
+| `id` | Indonesian | `th`    | Thai                  |
+| `it` | Italian    | `tr`    | Turkish               |
+| `ja` | Japanese   | `uk`    | Ukrainian             |
+|      |            | `vi`    | Vietnamese            |
+|      |            | `zh`    | Chinese (Simplified)  |
+|      |            | `zh-tw` | Chinese (Traditional) |
 
 ## Best Practices
 

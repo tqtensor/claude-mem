@@ -10,9 +10,9 @@
 +-----------------------------------------------------------+
 |  CLI Layer (Bun)                                          |
 |  +-- bun-runner.js (Node->Bun bridge)                     |
-|  +-- hook-command.ts (orchestrator)                        |
-|  +-- handlers/ (context, session-init, observation,        |
-|                 summarize, session-complete)               |
+|  +-- hook-command.ts (orchestrator)                       |
+|  +-- handlers/ (context, session-init, observation,       |
+|                 summarize, session-complete)              |
 +-----------------------------------------------------------+
 |  Worker Daemon (Express, per-user port 37700+(uid%100))   |
 |  +-- SessionManager (session lifecycle)                   |
@@ -30,14 +30,14 @@
 
 ## Hook Lifecycle
 
-| Event | Handler | What it does | Timeout |
-|-------|---------|-------------|---------|
-| Setup | version-check.js | Sub-100ms version-marker check; prompts `npx claude-mem repair` on mismatch | 60s |
-| SessionStart | worker start + context | Start worker service and inject context | 60s |
-| UserPromptSubmit | session-init | Register session + start SDK agent + semantic injection | 60s |
-| PostToolUse | observation | Capture tool usage -> enqueue in worker | 120s |
-| Summary | summarize | Request session summary from SDK agent | 120s |
-| SessionEnd | session-complete | End session + drain pending messages | 30s |
+| Event            | Handler                | What it does                                                                | Timeout |
+| ---------------- | ---------------------- | --------------------------------------------------------------------------- | ------- |
+| Setup            | version-check.js       | Sub-100ms version-marker check; prompts `npx claude-mem repair` on mismatch | 60s     |
+| SessionStart     | worker start + context | Start worker service and inject context                                     | 60s     |
+| UserPromptSubmit | session-init           | Register session + start SDK agent + semantic injection                     | 60s     |
+| PostToolUse      | observation            | Capture tool usage -> enqueue in worker                                     | 120s    |
+| Summary          | summarize              | Request session summary from SDK agent                                      | 120s    |
+| SessionEnd       | session-complete       | End session + drain pending messages                                        | 30s     |
 
 On first install, `npx claude-mem install` sets up Bun and uv globally, runs `bun install` in the plugin cache, and writes an `.install-version` marker — all behind a visible clack spinner. The Setup hook then runs `version-check.js` on every Claude Code startup; if the plugin was upgraded externally (e.g. `claude plugin update`), it writes a hint to stderr asking the user to run `npx claude-mem repair`. The hook always exits 0 (non-blocking).
 
@@ -115,14 +115,14 @@ The conversion between them is handled by SessionStore and is critical for FK co
 
 ### SQLite (claude-mem.db)
 
-| Table | Key fields | Purpose |
-|-------|-----------|---------|
-| sdk_sessions | content_session_id, memory_session_id, status | Session lifecycle |
-| observations | memory_session_id, type, title, narrative, content_hash | Tool usage observations |
-| session_summaries | memory_session_id, request, learned, completed | Session summaries |
-| user_prompts | content_session_id, prompt_text | User prompt history |
-| pending_messages | session_db_id, message_type | Per-session pending queue |
-| observation_feedback | observation_id, signal_type | Usage tracking |
+| Table                | Key fields                                              | Purpose                   |
+| -------------------- | ------------------------------------------------------- | ------------------------- |
+| sdk_sessions         | content_session_id, memory_session_id, status           | Session lifecycle         |
+| observations         | memory_session_id, type, title, narrative, content_hash | Tool usage observations   |
+| session_summaries    | memory_session_id, request, learned, completed          | Session summaries         |
+| user_prompts         | content_session_id, prompt_text                         | User prompt history       |
+| pending_messages     | session_db_id, message_type                             | Per-session pending queue |
+| observation_feedback | observation_id, signal_type                             | Usage tracking            |
 
 ### ChromaDB (chroma.sqlite3)
 

@@ -115,14 +115,14 @@ chmod +x .cursor/hooks/*.sh
 
 ## Hook Mappings
 
-| Cursor Hook | Script | Purpose |
-|-------------|--------|---------|
-| `beforeSubmitPrompt` | `session-init.sh` | Initialize claude-mem session |
-| `beforeSubmitPrompt` | `context-inject.sh` | Ensure worker is running |
-| `afterMCPExecution` | `save-observation.sh` | Capture MCP tool usage |
-| `afterShellExecution` | `save-observation.sh` | Capture shell command execution |
-| `afterFileEdit` | `save-file-edit.sh` | Capture file edits |
-| `stop` | `session-summary.sh` | Generate summary + update context file |
+| Cursor Hook           | Script                | Purpose                                |
+| --------------------- | --------------------- | -------------------------------------- |
+| `beforeSubmitPrompt`  | `session-init.sh`     | Initialize claude-mem session          |
+| `beforeSubmitPrompt`  | `context-inject.sh`   | Ensure worker is running               |
+| `afterMCPExecution`   | `save-observation.sh` | Capture MCP tool usage                 |
+| `afterShellExecution` | `save-observation.sh` | Capture shell command execution        |
+| `afterFileEdit`       | `save-file-edit.sh`   | Capture file edits                     |
+| `stop`                | `session-summary.sh`  | Generate summary + update context file |
 
 ## How It Works
 
@@ -220,13 +220,13 @@ Install on Ubuntu: `apt-get install jq curl`
 
 ## Comparison with Claude Code Integration
 
-| Feature | Claude Code | Cursor |
-|---------|-------------|--------|
-| Session Initialization | ✅ `SessionStart` hook | ✅ `beforeSubmitPrompt` hook |
-| Context Injection | ✅ `additionalContext` field | ✅ Auto-updated `.cursor/rules/` file |
-| Observation Capture | ✅ `PostToolUse` hook | ✅ `afterMCPExecution`, `afterShellExecution`, `afterFileEdit` |
-| Session Summary | ✅ `Stop` hook with transcript | ⚠️ `stop` hook (no transcript) |
-| MCP Search Tools | ✅ Full support | ✅ Full support (if MCP configured) |
+| Feature                | Claude Code                   | Cursor                                                        |
+| ---------------------- | ----------------------------- | ------------------------------------------------------------- |
+| Session Initialization | ✅ `SessionStart` hook         | ✅ `beforeSubmitPrompt` hook                                   |
+| Context Injection      | ✅ `additionalContext` field   | ✅ Auto-updated `.cursor/rules/` file                          |
+| Observation Capture    | ✅ `PostToolUse` hook          | ✅ `afterMCPExecution`, `afterShellExecution`, `afterFileEdit` |
+| Session Summary        | ✅ `Stop` hook with transcript | ⚠️ `stop` hook (no transcript)                                 |
+| MCP Search Tools       | ✅ Full support                | ✅ Full support (if MCP configured)                            |
 
 ## Files
 

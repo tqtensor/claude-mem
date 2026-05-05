@@ -18,13 +18,13 @@ These facts came from a discovery agent + direct file reads. Each implementation
 
 ### Allowed APIs / patterns to copy
 
-| Item | Location | What to copy |
-|---|---|---|
-| NPX command dispatcher | `src/npx-cli/index.ts:39–141` | Manual `switch (command)` on `process.argv.slice(2)`. Each case dynamic-imports its handler. |
-| `install` case (template for `repair`) | `src/npx-cli/index.ts:46–52` | `const { runInstallCommand } = await import('./commands/install.js'); await runInstallCommand({ ide: ideValue });` |
-| Plugin cache dir helper | `src/npx-cli/utils/paths.ts:32–34` | `pluginCacheDirectory(version)` → `~/.claude/plugins/cache/thedotmack/claude-mem/{version}/` |
-| `.install-version` marker readers | `src/services/context/ContextBuilder.ts:36,45` and `src/services/worker/BranchManager.ts:173,228` | These read/delete the marker. Marker schema (`{ version, bun, uv, installedAt }`) MUST be preserved. |
-| `clack` task pattern | `src/npx-cli/commands/install.ts:604–664` | `runTasks([{ title, task: async (message) => { … return 'Done OK' } }])` |
+| Item                                   | Location                                                                                          | What to copy                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| NPX command dispatcher                 | `src/npx-cli/index.ts:39–141`                                                                     | Manual `switch (command)` on `process.argv.slice(2)`. Each case dynamic-imports its handler.                       |
+| `install` case (template for `repair`) | `src/npx-cli/index.ts:46–52`                                                                      | `const { runInstallCommand } = await import('./commands/install.js'); await runInstallCommand({ ide: ideValue });` |
+| Plugin cache dir helper                | `src/npx-cli/utils/paths.ts:32–34`                                                                | `pluginCacheDirectory(version)` → `~/.claude/plugins/cache/thedotmack/claude-mem/{version}/`                       |
+| `.install-version` marker readers      | `src/services/context/ContextBuilder.ts:36,45` and `src/services/worker/BranchManager.ts:173,228` | These read/delete the marker. Marker schema (`{ version, bun, uv, installedAt }`) MUST be preserved.               |
+| `clack` task pattern                   | `src/npx-cli/commands/install.ts:604–664`                                                         | `runTasks([{ title, task: async (message) => { … return 'Done OK' } }])`                                           |
 
 ### Anti-patterns / API methods that DO NOT exist (avoid inventing)
 
@@ -36,18 +36,18 @@ These facts came from a discovery agent + direct file reads. Each implementation
 
 ### File inventory used by this plan
 
-| File | Lines | Disposition |
-|---|---|---|
-| `src/npx-cli/commands/install.ts` | 761 | Edited heavily (Phase 2) |
-| `src/npx-cli/index.ts` | 147 | One case added (Phase 3) |
-| `plugin/hooks/hooks.json` | 93 | Setup hook command rewritten, SessionStart smart-install entry deleted (Phase 4) |
-| `scripts/smart-install.js` | 264 | DELETED (Phase 5) |
-| `plugin/scripts/smart-install.js` | ≈264 | DELETED (Phase 5) |
-| `tests/smart-install.test.ts` | 310 | DELETED (Phase 5) |
-| `tests/plugin-scripts-line-endings.test.ts` | 33 | One array entry removed (Phase 5) |
-| `plugin/scripts/version-check.js` | NEW | CREATED (Phase 4) |
-| `src/npx-cli/install/setup-runtime.ts` | NEW | CREATED (Phase 1) |
-| Docs (`docs/public/*.mdx`, `docs/architecture-overview.md`) | misc | Light edit (Phase 6) |
+| File                                                        | Lines | Disposition                                                                      |
+| ----------------------------------------------------------- | ----- | -------------------------------------------------------------------------------- |
+| `src/npx-cli/commands/install.ts`                           | 761   | Edited heavily (Phase 2)                                                         |
+| `src/npx-cli/index.ts`                                      | 147   | One case added (Phase 3)                                                         |
+| `plugin/hooks/hooks.json`                                   | 93    | Setup hook command rewritten, SessionStart smart-install entry deleted (Phase 4) |
+| `scripts/smart-install.js`                                  | 264   | DELETED (Phase 5)                                                                |
+| `plugin/scripts/smart-install.js`                           | ≈264  | DELETED (Phase 5)                                                                |
+| `tests/smart-install.test.ts`                               | 310   | DELETED (Phase 5)                                                                |
+| `tests/plugin-scripts-line-endings.test.ts`                 | 33    | One array entry removed (Phase 5)                                                |
+| `plugin/scripts/version-check.js`                           | NEW   | CREATED (Phase 4)                                                                |
+| `src/npx-cli/install/setup-runtime.ts`                      | NEW   | CREATED (Phase 1)                                                                |
+| Docs (`docs/public/*.mdx`, `docs/architecture-overview.md`) | misc  | Light edit (Phase 6)                                                             |
 
 ---
 
@@ -70,15 +70,15 @@ export function isInstallCurrent(targetDir: string, expectedVersion: string): bo
 
 **Reference implementation to port from:** `scripts/smart-install.js:1–264`. Map old → new:
 
-| smart-install.js | setup-runtime.ts |
-|---|---|
-| `getBunPath()` / `isBunInstalled()` / `installBun()` (lines 42–152) | private helpers consumed by `ensureBun()` |
-| `getUvPath()` / `isUvInstalled()` / `installUv()` (lines 77–194) | private helpers consumed by `ensureUv()` |
-| `needsInstall()` (lines 196–205) | `isInstallCurrent()` + `readInstallMarker()` |
-| `installDeps()` (lines 207–226) | `installPluginDependencies(targetDir, bunPath)` — accepts target dir as parameter |
-| `verifyCriticalModules()` (lines 228–246) | private helper called inside `installPluginDependencies` |
-| `MARKER` constant (line 32) | derive inside each function: `join(targetDir, '.install-version')` |
-| Top-level `try { … }` (lines 248–264) | DELETE — caller orchestrates |
+| smart-install.js                                                    | setup-runtime.ts                                                                  |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `getBunPath()` / `isBunInstalled()` / `installBun()` (lines 42–152) | private helpers consumed by `ensureBun()`                                         |
+| `getUvPath()` / `isUvInstalled()` / `installUv()` (lines 77–194)    | private helpers consumed by `ensureUv()`                                          |
+| `needsInstall()` (lines 196–205)                                    | `isInstallCurrent()` + `readInstallMarker()`                                      |
+| `installDeps()` (lines 207–226)                                     | `installPluginDependencies(targetDir, bunPath)` — accepts target dir as parameter |
+| `verifyCriticalModules()` (lines 228–246)                           | private helper called inside `installPluginDependencies`                          |
+| `MARKER` constant (line 32)                                         | derive inside each function: `join(targetDir, '.install-version')`                |
+| Top-level `try { … }` (lines 248–264)                               | DELETE — caller orchestrates                                                      |
 
 **Key behavioral differences from smart-install.js:**
 - All functions take `targetDir` as a parameter (was a top-level `ROOT` constant).
@@ -510,22 +510,22 @@ Per the PR creation flow in the user's outer task. Don't auto-merge; the user wa
 
 ## Summary of file changes
 
-| Type | Path | Phase |
-|---|---|---|
-| Created | `src/npx-cli/install/setup-runtime.ts` | 1 |
-| Edited | `src/npx-cli/commands/install.ts` | 2 |
-| Edited | `src/npx-cli/index.ts` | 3 |
-| Created | `plugin/scripts/version-check.js` | 4 |
-| Edited | `plugin/hooks/hooks.json` | 4 |
-| Deleted | `scripts/smart-install.js` | 5 |
-| Deleted | `plugin/scripts/smart-install.js` | 5 |
-| Deleted | `tests/smart-install.test.ts` | 5 |
-| Edited | `tests/plugin-scripts-line-endings.test.ts` | 5 |
-| Created | `tests/setup-runtime.test.ts` (optional) | 5 |
-| Edited | `docs/architecture-overview.md` | 6 |
-| Edited | `docs/public/configuration.mdx` | 6 |
-| Edited | `docs/public/development.mdx` | 6 |
-| Edited | `docs/public/hooks-architecture.mdx` | 6 |
-| Edited | `docs/public/architecture/*.md` | 6 |
+| Type    | Path                                        | Phase |
+| ------- | ------------------------------------------- | ----- |
+| Created | `src/npx-cli/install/setup-runtime.ts`      | 1     |
+| Edited  | `src/npx-cli/commands/install.ts`           | 2     |
+| Edited  | `src/npx-cli/index.ts`                      | 3     |
+| Created | `plugin/scripts/version-check.js`           | 4     |
+| Edited  | `plugin/hooks/hooks.json`                   | 4     |
+| Deleted | `scripts/smart-install.js`                  | 5     |
+| Deleted | `plugin/scripts/smart-install.js`           | 5     |
+| Deleted | `tests/smart-install.test.ts`               | 5     |
+| Edited  | `tests/plugin-scripts-line-endings.test.ts` | 5     |
+| Created | `tests/setup-runtime.test.ts` (optional)    | 5     |
+| Edited  | `docs/architecture-overview.md`             | 6     |
+| Edited  | `docs/public/configuration.mdx`             | 6     |
+| Edited  | `docs/public/development.mdx`               | 6     |
+| Edited  | `docs/public/hooks-architecture.mdx`        | 6     |
+| Edited  | `docs/public/architecture/*.md`             | 6     |
 
 Estimated diff: **+250 / −500 lines** (net deletion).

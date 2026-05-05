@@ -67,10 +67,10 @@ Never fetch full details without filtering first.
 
 ## File Locations
 
-| File | Purpose | Created By |
-|------|---------|------------|
-| `.cursor/rules/claude-mem-context.mdc` | Auto-injected context | Hook (automatic) |
-| `.cursor/rules/claude-mem-instructions.mdc` | MCP tool instructions | You (optional) |
+| File                                        | Purpose               | Created By       |
+| ------------------------------------------- | --------------------- | ---------------- |
+| `.cursor/rules/claude-mem-context.mdc`      | Auto-injected context | Hook (automatic) |
+| `.cursor/rules/claude-mem-instructions.mdc` | MCP tool instructions | You (optional)   |
 
 ## Git Ignore
 

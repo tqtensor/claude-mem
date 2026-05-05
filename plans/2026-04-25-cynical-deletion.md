@@ -10,17 +10,17 @@ The codebase has accumulated **defenders** (orphan cleanup → duplicate detecti
 
 ## Coverage map (29 issues)
 
-| Phase | Action | Closes |
-|---|---|---|
-| P1 | DEL-1 + DEL-2: process-management theater + shell-string spawning | #2090, #2095, #2107, #2111, #2114, #2117, #2135, #2123, #2097 |
-| P2 | DEL-9: observer-sessions trust boundary (`CLAUDE_MEM_INTERNAL` env) | #2126, #2118 |
-| P3 | CON-2 + DEL-7: multi-account commit, port/path de-hardcoding | #2103, #2109, #2101 |
-| P4 | CON-1: extend env sanitizer to proxy vars | #2115, #2099 |
-| P5 | FF-1: fail-fast cleanup | #2089, #2094, #2116 |
-| P6 | DEL-4 + DEL-5 + DEL-6 + DEL-8: small deletions | #2113, #2087, #2127, #2098, #2054 |
-| P7 | #2106 install fixes (UX + shutdown-before-overwrite + uninstall coverage + real-port query) | #2106 |
-| P8 | DEL-3 lite: pin chroma-mcp deterministically (full sqlite-vec migration deferred) | #2046, #2085, #2102 |
-| P9 | Verification + close-as-dup/already-fixed | #2112, #2123→#2135, #2097→#2135, #2098→#2127, #2126 (closed by P2) |
+| Phase | Action                                                                                      | Closes                                                             |
+| ----- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| P1    | DEL-1 + DEL-2: process-management theater + shell-string spawning                           | #2090, #2095, #2107, #2111, #2114, #2117, #2135, #2123, #2097      |
+| P2    | DEL-9: observer-sessions trust boundary (`CLAUDE_MEM_INTERNAL` env)                         | #2126, #2118                                                       |
+| P3    | CON-2 + DEL-7: multi-account commit, port/path de-hardcoding                                | #2103, #2109, #2101                                                |
+| P4    | CON-1: extend env sanitizer to proxy vars                                                   | #2115, #2099                                                       |
+| P5    | FF-1: fail-fast cleanup                                                                     | #2089, #2094, #2116                                                |
+| P6    | DEL-4 + DEL-5 + DEL-6 + DEL-8: small deletions                                              | #2113, #2087, #2127, #2098, #2054                                  |
+| P7    | #2106 install fixes (UX + shutdown-before-overwrite + uninstall coverage + real-port query) | #2106                                                              |
+| P8    | DEL-3 lite: pin chroma-mcp deterministically (full sqlite-vec migration deferred)           | #2046, #2085, #2102                                                |
+| P9    | Verification + close-as-dup/already-fixed                                                   | #2112, #2123→#2135, #2097→#2135, #2098→#2127, #2126 (closed by P2) |
 
 ---
 
