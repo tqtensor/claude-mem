@@ -4,10 +4,12 @@ import { execSync } from "child_process";
 import { spawnHidden } from "./spawn.js";
 import { logger } from "../utils/logger.js";
 import { HOOK_TIMEOUTS, HOOK_EXIT_CODES, getTimeout } from "./hook-constants.js";
-import { SettingsDefaultsManager } from "./SettingsDefaultsManager.js";
+import { SettingsDefaultsManager, type SettingsDefaults } from "./SettingsDefaultsManager.js";
 import { MARKETPLACE_ROOT, DATA_DIR } from "./paths.js";
 import { loadFromFileOnce } from "./hook-settings.js";
 import { validateWorkerPidFile } from "../supervisor/index.js";
+
+const REMOTE_HEALTH_CACHE_MS = 5_000;
 
 const HEALTH_CHECK_TIMEOUT_MS = (() => {
   const envVal = process.env.CLAUDE_MEM_HEALTH_TIMEOUT_MS;
@@ -38,15 +40,24 @@ export function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs:
 
 let cachedPort: number | null = null;
 let cachedHost: string | null = null;
+let cachedSettings: SettingsDefaults | null = null;
+
+function loadSettings(): SettingsDefaults {
+  if (cachedSettings !== null) return cachedSettings;
+  const settingsPath = path.join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
+  cachedSettings = SettingsDefaultsManager.loadFromFile(settingsPath);
+  return cachedSettings;
+}
+
+export function getSettingValue(key: keyof SettingsDefaults): string {
+  return loadSettings()[key] ?? '';
+}
 
 export function getWorkerPort(): number {
   if (cachedPort !== null) {
     return cachedPort;
   }
-
-  const settingsPath = path.join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
-  const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
-  cachedPort = parseInt(settings.CLAUDE_MEM_WORKER_PORT, 10);
+  cachedPort = parseInt(loadSettings().CLAUDE_MEM_WORKER_PORT, 10);
   return cachedPort;
 }
 
@@ -54,19 +65,22 @@ export function getWorkerHost(): string {
   if (cachedHost !== null) {
     return cachedHost;
   }
-
-  const settingsPath = path.join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
-  const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
-  cachedHost = settings.CLAUDE_MEM_WORKER_HOST;
+  cachedHost = loadSettings().CLAUDE_MEM_WORKER_HOST;
   return cachedHost;
 }
 
 export function clearPortCache(): void {
   cachedPort = null;
   cachedHost = null;
+  cachedSettings = null;
+  remoteHealthCache.clear();
 }
 
 export function buildWorkerUrl(apiPath: string): string {
+  const remoteUrl = getSettingValue('CLAUDE_MEM_REMOTE_URL');
+  if (remoteUrl) {
+    return `${remoteUrl.replace(/\/$/, '')}${apiPath}`;
+  }
   return `http://${getWorkerHost()}:${getWorkerPort()}${apiPath}`;
 }
 
@@ -84,8 +98,13 @@ export function workerHttpRequest(
 
   const url = buildWorkerUrl(apiPath);
   const init: RequestInit = { method };
-  if (options.headers) {
-    init.headers = options.headers;
+  const headers: Record<string, string> = { ...(options.headers ?? {}) };
+  const apiKey = getSettingValue('CLAUDE_MEM_API_KEY');
+  if (apiKey && !headers['Authorization'] && !headers['authorization']) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+  if (Object.keys(headers).length > 0) {
+    init.headers = headers;
   }
   if (options.body) {
     init.body = options.body;
@@ -95,6 +114,23 @@ export function workerHttpRequest(
     return fetchWithTimeout(url, init, timeoutMs);
   }
   return fetch(url, init);
+}
+
+const remoteHealthCache = new Map<string, { ok: boolean; expiresAt: number }>();
+
+async function isRemoteWorkerHealthy(remoteUrl: string, timeoutMs: number): Promise<boolean> {
+  const now = Date.now();
+  const cached = remoteHealthCache.get(remoteUrl);
+  if (cached && cached.expiresAt > now) return cached.ok;
+  let ok = false;
+  try {
+    const response = await workerHttpRequest('/api/health', { timeoutMs });
+    ok = response.ok;
+  } catch {
+    ok = false;
+  }
+  remoteHealthCache.set(remoteUrl, { ok, expiresAt: now + REMOTE_HEALTH_CACHE_MS });
+  return ok;
 }
 
 async function isWorkerHealthy(): Promise<boolean> {
@@ -222,6 +258,16 @@ async function isWorkerPortAlive(): Promise<boolean> {
 }
 
 export async function ensureWorkerRunning(): Promise<boolean> {
+  const remoteUrl = getSettingValue('CLAUDE_MEM_REMOTE_URL');
+  if (remoteUrl) {
+    const healthy = await isRemoteWorkerHealthy(remoteUrl, 2_000);
+    if (!healthy) {
+      logger.warn('REMOTE', `claude-mem: remote worker unreachable at ${remoteUrl}`);
+      return false;
+    }
+    return true;
+  }
+
   if (await isWorkerPortAlive()) {
     await checkWorkerVersion();
     return true;
