@@ -25,7 +25,7 @@ export class SessionManager {
     if (!this.pendingStore) {
       const sessionStore = this.dbManager.getSessionStore();
       this.pendingStore = new PendingMessageStore(
-        sessionStore.db,
+        sessionStore.adapter,
         () => this.onPendingMutate?.()
       );
     }
@@ -171,7 +171,7 @@ export class SessionManager {
     return this.sessions.get(sessionDbId);
   }
 
-  queueObservation(sessionDbId: number, data: ObservationData): void {
+  async queueObservation(sessionDbId: number, data: ObservationData): Promise<void> {
     let session = this.sessions.get(sessionDbId);
     if (!session) {
       session = this.initializeSession(sessionDbId);
@@ -190,8 +190,8 @@ export class SessionManager {
     };
 
     try {
-      const messageId = this.getPendingStore().enqueue(sessionDbId, session.contentSessionId, message);
-      const queueDepth = this.getPendingStore().getPendingCount(sessionDbId);
+      const messageId = await this.getPendingStore().enqueue(sessionDbId, session.contentSessionId, message);
+      const queueDepth = await this.getPendingStore().getPendingCount(sessionDbId);
       const toolSummary = logger.formatTool(data.tool_name, data.tool_input);
       if (messageId === 0) {
         logger.debug('QUEUE', `DUP_SUPPRESSED | sessionDbId=${sessionDbId} | type=observation | tool=${toolSummary} | toolUseId=${data.toolUseId ?? 'null'} | depth=${queueDepth}`, {
@@ -216,7 +216,7 @@ export class SessionManager {
     emitter?.emit('message');
   }
 
-  queueSummarize(sessionDbId: number, lastAssistantMessage?: string): void {
+  async queueSummarize(sessionDbId: number, lastAssistantMessage?: string): Promise<void> {
     let session = this.sessions.get(sessionDbId);
     if (!session) {
       session = this.initializeSession(sessionDbId);
@@ -228,8 +228,8 @@ export class SessionManager {
     };
 
     try {
-      const messageId = this.getPendingStore().enqueue(sessionDbId, session.contentSessionId, message);
-      const queueDepth = this.getPendingStore().getPendingCount(sessionDbId);
+      const messageId = await this.getPendingStore().enqueue(sessionDbId, session.contentSessionId, message);
+      const queueDepth = await this.getPendingStore().getPendingCount(sessionDbId);
       if (messageId === 0) {
         logger.debug('QUEUE', `DUP_SUPPRESSED | sessionDbId=${sessionDbId} | type=summarize | depth=${queueDepth}`, {
           sessionId: sessionDbId

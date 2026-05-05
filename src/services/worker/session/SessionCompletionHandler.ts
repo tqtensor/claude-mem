@@ -11,7 +11,7 @@ export class SessionCompletionHandler {
     private dbManager: DatabaseManager
   ) {}
 
-  finalizeSession(sessionDbId: number): void {
+  async finalizeSession(sessionDbId: number): Promise<void> {
     const sessionStore = this.dbManager.getSessionStore();
 
     const row = sessionStore.getSessionById(sessionDbId);
@@ -28,7 +28,7 @@ export class SessionCompletionHandler {
 
     try {
       const pendingStore = this.sessionManager.getPendingMessageStore();
-      const cleared = pendingStore.clearPendingForSession(sessionDbId);
+      const cleared = await pendingStore.clearPendingForSession(sessionDbId);
       if (cleared > 0) {
         logger.warn('SESSION', `Cleared ${cleared} orphaned pending messages on session finalize`, {
           sessionId: sessionDbId, cleared

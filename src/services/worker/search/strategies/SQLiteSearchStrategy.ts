@@ -54,7 +54,7 @@ export class SQLiteSearchStrategy extends BaseSearchStrategy implements SearchSt
     const obsOptions = searchObservations ? { ...baseOptions, type: obsType, concepts, files } : null;
 
     try {
-      return this.executeSqliteSearch(obsOptions, searchSessions, searchPrompts, baseOptions);
+      return await this.executeSqliteSearch(obsOptions, searchSessions, searchPrompts, baseOptions);
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error(String(error));
       logger.error('WORKER', 'SQLiteSearchStrategy: Search failed', {}, errorObj);
@@ -62,24 +62,24 @@ export class SQLiteSearchStrategy extends BaseSearchStrategy implements SearchSt
     }
   }
 
-  private executeSqliteSearch(
+  private async executeSqliteSearch(
     obsOptions: Record<string, any> | null,
     searchSessions: boolean,
     searchPrompts: boolean,
     baseOptions: Record<string, any>
-  ): StrategySearchResult {
+  ): Promise<StrategySearchResult> {
     let observations: ObservationSearchResult[] = [];
     let sessions: SessionSummarySearchResult[] = [];
     let prompts: UserPromptSearchResult[] = [];
 
     if (obsOptions) {
-      observations = this.sessionSearch.searchObservations(undefined, obsOptions);
+      observations = await this.sessionSearch.searchObservations(undefined, obsOptions);
     }
     if (searchSessions) {
-      sessions = this.sessionSearch.searchSessions(undefined, baseOptions);
+      sessions = await this.sessionSearch.searchSessions(undefined, baseOptions);
     }
     if (searchPrompts) {
-      prompts = this.sessionSearch.searchUserPrompts(undefined, baseOptions);
+      prompts = await this.sessionSearch.searchUserPrompts(undefined, baseOptions);
     }
 
     return {
@@ -89,21 +89,21 @@ export class SQLiteSearchStrategy extends BaseSearchStrategy implements SearchSt
     };
   }
 
-  findByConcept(concept: string, options: StrategySearchOptions): ObservationSearchResult[] {
+  async findByConcept(concept: string, options: StrategySearchOptions): Promise<ObservationSearchResult[]> {
     const { limit = SEARCH_CONSTANTS.DEFAULT_LIMIT, project, dateRange, orderBy = 'date_desc' } = options;
-    return this.sessionSearch.findByConcept(concept, { limit, project, dateRange, orderBy });
+    return await this.sessionSearch.findByConcept(concept, { limit, project, dateRange, orderBy });
   }
 
-  findByType(type: string | string[], options: StrategySearchOptions): ObservationSearchResult[] {
+  async findByType(type: string | string[], options: StrategySearchOptions): Promise<ObservationSearchResult[]> {
     const { limit = SEARCH_CONSTANTS.DEFAULT_LIMIT, project, dateRange, orderBy = 'date_desc' } = options;
-    return this.sessionSearch.findByType(type as any, { limit, project, dateRange, orderBy });
+    return await this.sessionSearch.findByType(type as any, { limit, project, dateRange, orderBy });
   }
 
-  findByFile(filePath: string, options: StrategySearchOptions): {
+  async findByFile(filePath: string, options: StrategySearchOptions): Promise<{
     observations: ObservationSearchResult[];
     sessions: SessionSummarySearchResult[];
-  } {
+  }> {
     const { limit = SEARCH_CONSTANTS.DEFAULT_LIMIT, project, dateRange, orderBy = 'date_desc' } = options;
-    return this.sessionSearch.findByFile(filePath, { limit, project, dateRange, orderBy });
+    return await this.sessionSearch.findByFile(filePath, { limit, project, dateRange, orderBy });
   }
 }

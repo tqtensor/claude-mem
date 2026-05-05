@@ -24,7 +24,7 @@ export class SessionQueueProcessor {
     while (!signal.aborted) {
       let persistentMessage: PersistentPendingMessage | null = null;
       try {
-        persistentMessage = this.store.claimNextMessage(sessionDbId);
+        persistentMessage = await this.store.claimNextMessage(sessionDbId);
       } catch (error) {
         if (signal.aborted) return;
         const normalizedError = error instanceof Error ? error : new Error(String(error));

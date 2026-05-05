@@ -1,37 +1,35 @@
 
-import type { Database } from 'bun:sqlite';
-import { logger } from '../../../utils/logger.js';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import type { UserPromptRecord, LatestPromptResult } from '../../../types/database.js';
 import type { RecentUserPromptResult, PromptWithProject, GetPromptsByIdsOptions } from './types.js';
 
-export function getUserPrompt(
-  db: Database,
+export async function getUserPrompt(
+  adapter: DbAdapter,
   contentSessionId: string,
   promptNumber: number
-): string | null {
-  const stmt = db.prepare(`
+): Promise<string | null> {
+  const result = await adapter.get<{ prompt_text: string }>(`
     SELECT prompt_text
     FROM user_prompts
     WHERE content_session_id = ? AND prompt_number = ?
     LIMIT 1
-  `);
+  `, [contentSessionId, promptNumber]);
 
-  const result = stmt.get(contentSessionId, promptNumber) as { prompt_text: string } | undefined;
   return result?.prompt_text ?? null;
 }
 
-export function getPromptNumberFromUserPrompts(db: Database, contentSessionId: string): number {
-  const result = db.prepare(`
+export async function getPromptNumberFromUserPrompts(adapter: DbAdapter, contentSessionId: string): Promise<number> {
+  const result = await adapter.get<{ count: number }>(`
     SELECT COUNT(*) as count FROM user_prompts WHERE content_session_id = ?
-  `).get(contentSessionId) as { count: number };
-  return result.count;
+  `, [contentSessionId]);
+  return result!.count;
 }
 
-export function getLatestUserPrompt(
-  db: Database,
+export async function getLatestUserPrompt(
+  adapter: DbAdapter,
   contentSessionId: string
-): LatestPromptResult | undefined {
-  const stmt = db.prepare(`
+): Promise<LatestPromptResult | undefined> {
+  return await adapter.get<LatestPromptResult>(`
     SELECT
       up.*,
       s.memory_session_id,
@@ -41,16 +39,14 @@ export function getLatestUserPrompt(
     WHERE up.content_session_id = ?
     ORDER BY up.created_at_epoch DESC
     LIMIT 1
-  `);
-
-  return stmt.get(contentSessionId) as LatestPromptResult | undefined;
+  `, [contentSessionId]);
 }
 
-export function getAllRecentUserPrompts(
-  db: Database,
+export async function getAllRecentUserPrompts(
+  adapter: DbAdapter,
   limit: number = 100
-): RecentUserPromptResult[] {
-  const stmt = db.prepare(`
+): Promise<RecentUserPromptResult[]> {
+  return await adapter.all<RecentUserPromptResult>(`
     SELECT
       up.id,
       up.content_session_id,
@@ -63,13 +59,11 @@ export function getAllRecentUserPrompts(
     LEFT JOIN sdk_sessions s ON up.content_session_id = s.content_session_id
     ORDER BY up.created_at_epoch DESC
     LIMIT ?
-  `);
-
-  return stmt.all(limit) as RecentUserPromptResult[];
+  `, [limit]);
 }
 
-export function getPromptById(db: Database, id: number): PromptWithProject | null {
-  const stmt = db.prepare(`
+export async function getPromptById(adapter: DbAdapter, id: number): Promise<PromptWithProject | null> {
+  const row = await adapter.get<PromptWithProject>(`
     SELECT
       p.id,
       p.content_session_id,
@@ -82,16 +76,16 @@ export function getPromptById(db: Database, id: number): PromptWithProject | nul
     LEFT JOIN sdk_sessions s ON p.content_session_id = s.content_session_id
     WHERE p.id = ?
     LIMIT 1
-  `);
+  `, [id]);
 
-  return (stmt.get(id) as PromptWithProject | undefined) || null;
+  return row ?? null;
 }
 
-export function getPromptsByIds(db: Database, ids: number[]): PromptWithProject[] {
+export async function getPromptsByIds(adapter: DbAdapter, ids: number[]): Promise<PromptWithProject[]> {
   if (ids.length === 0) return [];
 
   const placeholders = ids.map(() => '?').join(',');
-  const stmt = db.prepare(`
+  return await adapter.all<PromptWithProject>(`
     SELECT
       p.id,
       p.content_session_id,
@@ -104,16 +98,14 @@ export function getPromptsByIds(db: Database, ids: number[]): PromptWithProject[
     LEFT JOIN sdk_sessions s ON p.content_session_id = s.content_session_id
     WHERE p.id IN (${placeholders})
     ORDER BY p.created_at_epoch DESC
-  `);
-
-  return stmt.all(...ids) as PromptWithProject[];
+  `, ids);
 }
 
-export function getUserPromptsByIds(
-  db: Database,
+export async function getUserPromptsByIds(
+  adapter: DbAdapter,
   ids: number[],
   options: GetPromptsByIdsOptions = {}
-): UserPromptRecord[] {
+): Promise<UserPromptRecord[]> {
   if (ids.length === 0) return [];
 
   const { orderBy = 'date_desc', limit, project } = options;
@@ -125,7 +117,7 @@ export function getUserPromptsByIds(
   const projectFilter = project ? 'AND s.project = ?' : '';
   if (project) params.push(project);
 
-  const stmt = db.prepare(`
+  return await adapter.all<UserPromptRecord>(`
     SELECT
       up.*,
       s.project,
@@ -135,7 +127,5 @@ export function getUserPromptsByIds(
     WHERE up.id IN (${placeholders}) ${projectFilter}
     ORDER BY up.created_at_epoch ${orderClause}
     ${limitClause}
-  `);
-
-  return stmt.all(...params) as UserPromptRecord[];
+  `, params);
 }

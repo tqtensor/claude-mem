@@ -1,5 +1,4 @@
 
-import type { SQLQueryBindings } from 'bun:sqlite';
 import { DatabaseManager } from './DatabaseManager.js';
 import { logger } from '../../utils/logger.js';
 import { OBSERVER_SESSIONS_PROJECT } from '../../shared/paths.js';
@@ -51,8 +50,8 @@ export class PaginationHelper {
     };
   }
 
-  getObservations(offset: number, limit: number, project?: string, platformSource?: string): PaginatedResult<Observation> {
-    const db = this.dbManager.getSessionStore().db;
+  async getObservations(offset: number, limit: number, project?: string, platformSource?: string): Promise<PaginatedResult<Observation>> {
+    const adapter = this.dbManager.getAdapter();
     let query = `
       SELECT
         o.id,
@@ -75,7 +74,7 @@ export class PaginationHelper {
       FROM observations o
       LEFT JOIN sdk_sessions s ON o.memory_session_id = s.memory_session_id
     `;
-    const params: SQLQueryBindings[] = [];
+    const params: unknown[] = [];
     const conditions: string[] = [];
 
     if (project) {
@@ -96,7 +95,7 @@ export class PaginationHelper {
     query += ' ORDER BY o.created_at_epoch DESC LIMIT ? OFFSET ?';
     params.push(limit + 1, offset);
 
-    const results = db.prepare(query).all(...params) as Observation[];
+    const results = await adapter.all<Observation>(query, params);
     const result: PaginatedResult<Observation> = {
       items: results.slice(0, limit),
       hasMore: results.length > limit,
@@ -110,8 +109,8 @@ export class PaginationHelper {
     };
   }
 
-  getSummaries(offset: number, limit: number, project?: string, platformSource?: string): PaginatedResult<Summary> {
-    const db = this.dbManager.getSessionStore().db;
+  async getSummaries(offset: number, limit: number, project?: string, platformSource?: string): Promise<PaginatedResult<Summary>> {
+    const adapter = this.dbManager.getAdapter();
 
     let query = `
       SELECT
@@ -129,7 +128,7 @@ export class PaginationHelper {
       FROM session_summaries ss
       JOIN sdk_sessions s ON ss.memory_session_id = s.memory_session_id
     `;
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     const conditions: string[] = [];
 
@@ -153,8 +152,7 @@ export class PaginationHelper {
     query += ' ORDER BY ss.created_at_epoch DESC LIMIT ? OFFSET ?';
     params.push(limit + 1, offset);
 
-    const stmt = db.prepare(query);
-    const results = stmt.all(...params) as Summary[];
+    const results = await adapter.all<Summary>(query, params);
 
     return {
       items: results.slice(0, limit),
@@ -164,8 +162,8 @@ export class PaginationHelper {
     };
   }
 
-  getPrompts(offset: number, limit: number, project?: string, platformSource?: string): PaginatedResult<UserPrompt> {
-    const db = this.dbManager.getSessionStore().db;
+  async getPrompts(offset: number, limit: number, project?: string, platformSource?: string): Promise<PaginatedResult<UserPrompt>> {
+    const adapter = this.dbManager.getAdapter();
 
     let query = `
       SELECT
@@ -180,7 +178,7 @@ export class PaginationHelper {
       FROM user_prompts up
       JOIN sdk_sessions s ON up.content_session_id = s.content_session_id
     `;
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     const conditions: string[] = [];
 
@@ -204,8 +202,7 @@ export class PaginationHelper {
     query += ' ORDER BY up.created_at_epoch DESC LIMIT ? OFFSET ?';
     params.push(limit + 1, offset);
 
-    const stmt = db.prepare(query);
-    const results = stmt.all(...params) as UserPrompt[];
+    const results = await adapter.all<UserPrompt>(query, params);
 
     return {
       items: results.slice(0, limit),
@@ -215,17 +212,17 @@ export class PaginationHelper {
     };
   }
 
-  private paginate<T>(
+  private async paginate<T>(
     table: string,
     columns: string,
     offset: number,
     limit: number,
     project?: string
-  ): PaginatedResult<T> {
-    const db = this.dbManager.getSessionStore().db;
+  ): Promise<PaginatedResult<T>> {
+    const adapter = this.dbManager.getAdapter();
 
     let query = `SELECT ${columns} FROM ${table}`;
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (project) {
       query += ' WHERE project = ?';
@@ -233,10 +230,9 @@ export class PaginationHelper {
     }
 
     query += ' ORDER BY created_at_epoch DESC LIMIT ? OFFSET ?';
-    params.push(limit + 1, offset); 
+    params.push(limit + 1, offset);
 
-    const stmt = db.prepare(query);
-    const results = stmt.all(...params) as T[];
+    const results = await adapter.all<T>(query, params);
 
     return {
       items: results.slice(0, limit),

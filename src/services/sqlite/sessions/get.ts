@@ -1,6 +1,5 @@
 
-import type { Database } from 'bun:sqlite';
-import { logger } from '../../../utils/logger.js';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import type {
   SessionBasic,
   SessionFull,
@@ -8,27 +7,27 @@ import type {
   SessionSummaryDetail,
 } from './types.js';
 
-export function getSessionById(db: Database, id: number): SessionBasic | null {
-  const stmt = db.prepare(`
+export async function getSessionById(adapter: DbAdapter, id: number): Promise<SessionBasic | null> {
+  const row = await adapter.get<SessionBasic>(`
     SELECT id, content_session_id, memory_session_id, project,
            COALESCE(platform_source, 'claude') as platform_source,
            user_prompt, custom_title
     FROM sdk_sessions
     WHERE id = ?
     LIMIT 1
-  `);
+  `, [id]);
 
-  return (stmt.get(id) as SessionBasic | undefined) || null;
+  return row ?? null;
 }
 
-export function getSdkSessionsBySessionIds(
-  db: Database,
+export async function getSdkSessionsBySessionIds(
+  adapter: DbAdapter,
   memorySessionIds: string[]
-): SessionFull[] {
+): Promise<SessionFull[]> {
   if (memorySessionIds.length === 0) return [];
 
   const placeholders = memorySessionIds.map(() => '?').join(',');
-  const stmt = db.prepare(`
+  return await adapter.all<SessionFull>(`
     SELECT id, content_session_id, memory_session_id, project,
            COALESCE(platform_source, 'claude') as platform_source,
            user_prompt, custom_title,
@@ -36,17 +35,15 @@ export function getSdkSessionsBySessionIds(
     FROM sdk_sessions
     WHERE memory_session_id IN (${placeholders})
     ORDER BY started_at_epoch DESC
-  `);
-
-  return stmt.all(...memorySessionIds) as SessionFull[];
+  `, [...memorySessionIds]);
 }
 
-export function getRecentSessionsWithStatus(
-  db: Database,
+export async function getRecentSessionsWithStatus(
+  adapter: DbAdapter,
   project: string,
   limit: number = 3
-): SessionWithStatus[] {
-  const stmt = db.prepare(`
+): Promise<SessionWithStatus[]> {
+  return await adapter.all<SessionWithStatus>(`
     SELECT * FROM (
       SELECT
         s.memory_session_id,
@@ -63,16 +60,14 @@ export function getRecentSessionsWithStatus(
       LIMIT ?
     )
     ORDER BY started_at_epoch ASC
-  `);
-
-  return stmt.all(project, limit) as SessionWithStatus[];
+  `, [project, limit]);
 }
 
-export function getSessionSummaryById(
-  db: Database,
+export async function getSessionSummaryById(
+  adapter: DbAdapter,
   id: number
-): SessionSummaryDetail | null {
-  const stmt = db.prepare(`
+): Promise<SessionSummaryDetail | null> {
+  const row = await adapter.get<SessionSummaryDetail>(`
     SELECT
       id,
       memory_session_id,
@@ -87,7 +82,7 @@ export function getSessionSummaryById(
     FROM sdk_sessions
     WHERE id = ?
     LIMIT 1
-  `);
+  `, [id]);
 
-  return (stmt.get(id) as SessionSummaryDetail | undefined) || null;
+  return row ?? null;
 }

@@ -38,7 +38,7 @@ export class MemoryRoutes extends BaseRouteHandler {
     const sessionStore = this.dbManager.getSessionStore();
     const chromaSync = this.dbManager.getChromaSync();
 
-    const memorySessionId = sessionStore.getOrCreateManualSession(targetProject);
+    const memorySessionId = await sessionStore.getOrCreateManualSession(targetProject);
 
     const observation = {
       type: 'discovery',  // Use existing valid type
@@ -52,12 +52,12 @@ export class MemoryRoutes extends BaseRouteHandler {
       metadata: metadata ? JSON.stringify(metadata) : null,
     };
 
-    const result = sessionStore.storeObservation(
+    const result = await sessionStore.storeObservation(
       memorySessionId,
       targetProject,
       observation,
       0,  // promptNumber
-      0   
+      0
     );
 
     logger.info('HTTP', 'Manual observation saved', {

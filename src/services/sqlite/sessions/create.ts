@@ -1,6 +1,5 @@
 
-import type { Database } from 'bun:sqlite';
-import { logger } from '../../../utils/logger.js';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import { DEFAULT_PLATFORM_SOURCE, normalizePlatformSource } from '../../../shared/platform-source.js';
 
 function resolveCreateSessionArgs(
@@ -13,35 +12,35 @@ function resolveCreateSessionArgs(
   };
 }
 
-export function createSDKSession(
-  db: Database,
+export async function createSDKSession(
+  adapter: DbAdapter,
   contentSessionId: string,
   project: string,
   userPrompt: string,
   customTitle?: string,
   platformSource?: string
-): number {
+): Promise<number> {
   const now = new Date();
   const nowEpoch = now.getTime();
   const resolved = resolveCreateSessionArgs(customTitle, platformSource);
   const normalizedPlatformSource = resolved.platformSource ?? DEFAULT_PLATFORM_SOURCE;
 
-  const existing = db.prepare(`
+  const existing = await adapter.get<{ id: number; platform_source: string | null }>(`
     SELECT id, platform_source FROM sdk_sessions WHERE content_session_id = ?
-  `).get(contentSessionId) as { id: number; platform_source: string | null } | undefined;
+  `, [contentSessionId]);
 
   if (existing) {
     if (project) {
-      db.prepare(`
+      await adapter.run(`
         UPDATE sdk_sessions SET project = ?
         WHERE content_session_id = ? AND (project IS NULL OR project = '')
-      `).run(project, contentSessionId);
+      `, [project, contentSessionId]);
     }
     if (resolved.customTitle) {
-      db.prepare(`
+      await adapter.run(`
         UPDATE sdk_sessions SET custom_title = ?
         WHERE content_session_id = ? AND custom_title IS NULL
-      `).run(resolved.customTitle, contentSessionId);
+      `, [resolved.customTitle, contentSessionId]);
     }
 
     if (resolved.platformSource) {
@@ -50,11 +49,11 @@ export function createSDKSession(
         : undefined;
 
       if (!storedPlatformSource) {
-        db.prepare(`
+        await adapter.run(`
           UPDATE sdk_sessions SET platform_source = ?
           WHERE content_session_id = ?
             AND COALESCE(platform_source, '') = ''
-        `).run(resolved.platformSource, contentSessionId);
+        `, [resolved.platformSource, contentSessionId]);
       } else if (storedPlatformSource !== resolved.platformSource) {
         throw new Error(
           `Platform source conflict for session ${contentSessionId}: existing=${storedPlatformSource}, received=${resolved.platformSource}`
@@ -64,25 +63,24 @@ export function createSDKSession(
     return existing.id;
   }
 
-  db.prepare(`
+  await adapter.run(`
     INSERT INTO sdk_sessions
     (content_session_id, memory_session_id, project, platform_source, user_prompt, custom_title, started_at, started_at_epoch, status)
     VALUES (?, NULL, ?, ?, ?, ?, ?, ?, 'active')
-  `).run(contentSessionId, project, normalizedPlatformSource, userPrompt, resolved.customTitle || null, now.toISOString(), nowEpoch);
+  `, [contentSessionId, project, normalizedPlatformSource, userPrompt, resolved.customTitle || null, now.toISOString(), nowEpoch]);
 
-  const row = db.prepare('SELECT id FROM sdk_sessions WHERE content_session_id = ?')
-    .get(contentSessionId) as { id: number };
-  return row.id;
+  const row = await adapter.get<{ id: number }>('SELECT id FROM sdk_sessions WHERE content_session_id = ?', [contentSessionId]);
+  return row!.id;
 }
 
-export function updateMemorySessionId(
-  db: Database,
+export async function updateMemorySessionId(
+  adapter: DbAdapter,
   sessionDbId: number,
   memorySessionId: string | null
-): void {
-  db.prepare(`
+): Promise<void> {
+  await adapter.run(`
     UPDATE sdk_sessions
     SET memory_session_id = ?
     WHERE id = ?
-  `).run(memorySessionId, sessionDbId);
+  `, [memorySessionId, sessionDbId]);
 }

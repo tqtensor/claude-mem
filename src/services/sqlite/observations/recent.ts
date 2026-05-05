@@ -1,46 +1,41 @@
 
-import { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import { logger } from '../../../utils/logger.js';
 import type { RecentObservationRow, AllRecentObservationRow } from './types.js';
 
-export function getRecentObservations(
-  db: Database,
+export async function getRecentObservations(
+  adapter: DbAdapter,
   project: string,
   limit: number = 20
-): RecentObservationRow[] {
-  const stmt = db.prepare(`
+): Promise<RecentObservationRow[]> {
+  return await adapter.all<RecentObservationRow>(`
     SELECT type, text, prompt_number, created_at
     FROM observations
     WHERE project = ?
     ORDER BY created_at_epoch DESC
     LIMIT ?
-  `);
-
-  return stmt.all(project, limit) as RecentObservationRow[];
+  `, [project, limit]);
 }
 
-export function getAllRecentObservations(
-  db: Database,
+export async function getAllRecentObservations(
+  adapter: DbAdapter,
   limit: number = 100
-): AllRecentObservationRow[] {
-  const stmt = db.prepare(`
+): Promise<AllRecentObservationRow[]> {
+  return await adapter.all<AllRecentObservationRow>(`
     SELECT id, type, title, subtitle, text, project, prompt_number, created_at, created_at_epoch
     FROM observations
     ORDER BY created_at_epoch DESC
     LIMIT ?
-  `);
-
-  return stmt.all(limit) as AllRecentObservationRow[];
+  `, [limit]);
 }
 
-export function getFirstObservationCreatedAt(db: Database): string | null {
-  const stmt = db.prepare(`
+export async function getFirstObservationCreatedAt(adapter: DbAdapter): Promise<string | null> {
+  const row = await adapter.get<{ created_at: string }>(`
     SELECT created_at
     FROM observations
     ORDER BY created_at_epoch ASC
     LIMIT 1
   `);
 
-  const row = stmt.get() as { created_at: string } | undefined;
   return row ? row.created_at : null;
 }

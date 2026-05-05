@@ -99,30 +99,30 @@ export class DataRoutes extends BaseRouteHandler {
     app.post('/api/import', validateBody(importSchema), this.handleImport.bind(this));
   }
 
-  private handleGetObservations = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetObservations = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { offset, limit, project, platformSource } = this.parsePaginationParams(req);
-    const result = this.paginationHelper.getObservations(offset, limit, project, platformSource);
+    const result = await this.paginationHelper.getObservations(offset, limit, project, platformSource);
     res.json(result);
   });
 
-  private handleGetSummaries = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetSummaries = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { offset, limit, project, platformSource } = this.parsePaginationParams(req);
-    const result = this.paginationHelper.getSummaries(offset, limit, project, platformSource);
+    const result = await this.paginationHelper.getSummaries(offset, limit, project, platformSource);
     res.json(result);
   });
 
-  private handleGetPrompts = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetPrompts = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { offset, limit, project, platformSource } = this.parsePaginationParams(req);
-    const result = this.paginationHelper.getPrompts(offset, limit, project, platformSource);
+    const result = await this.paginationHelper.getPrompts(offset, limit, project, platformSource);
     res.json(result);
   });
 
-  private handleGetObservationById = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetObservationById = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const id = this.parseIntParam(req, res, 'id');
     if (id === null) return;
 
     const store = this.dbManager.getSessionStore();
-    const observation = store.getObservationById(id);
+    const observation = await store.getObservationById(id);
 
     if (!observation) {
       this.notFound(res, `Observation #${id} not found`);
@@ -132,7 +132,7 @@ export class DataRoutes extends BaseRouteHandler {
     res.json(observation);
   });
 
-  private handleGetObservationsByFile = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetObservationsByFile = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const filePath = req.query.path as string | undefined;
     if (!filePath) {
       this.badRequest(res, 'path query parameter is required');
@@ -144,13 +144,13 @@ export class DataRoutes extends BaseRouteHandler {
     const parsedLimit = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
     const limit = Number.isFinite(parsedLimit) && parsedLimit! > 0 ? parsedLimit : undefined;
 
-    const db = this.dbManager.getSessionStore().db;
-    const observations = getObservationsByFilePath(db, filePath, { projects, limit });
+    const adapter = this.dbManager.getAdapter();
+    const observations = await getObservationsByFilePath(adapter, filePath, { projects, limit });
 
     res.json({ observations, count: observations.length });
   });
 
-  private handleGetObservationsByIds = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetObservationsByIds = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { ids, orderBy, limit, project } = req.body as z.infer<typeof observationsBatchSchema>;
 
     if (ids.length === 0) {
@@ -159,17 +159,17 @@ export class DataRoutes extends BaseRouteHandler {
     }
 
     const store = this.dbManager.getSessionStore();
-    const observations = store.getObservationsByIds(ids, { orderBy, limit, project });
+    const observations = await store.getObservationsByIds(ids, { orderBy, limit, project });
 
     res.json(observations);
   });
 
-  private handleGetSessionById = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetSessionById = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const id = this.parseIntParam(req, res, 'id');
     if (id === null) return;
 
     const store = this.dbManager.getSessionStore();
-    const sessions = store.getSessionSummariesByIds([id]);
+    const sessions = await store.getSessionSummariesByIds([id]);
 
     if (sessions.length === 0) {
       this.notFound(res, `Session #${id} not found`);
@@ -179,20 +179,20 @@ export class DataRoutes extends BaseRouteHandler {
     res.json(sessions[0]);
   });
 
-  private handleGetSdkSessionsByIds = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetSdkSessionsByIds = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { memorySessionIds } = req.body as z.infer<typeof sdkSessionsBatchSchema>;
 
     const store = this.dbManager.getSessionStore();
-    const sessions = store.getSdkSessionsBySessionIds(memorySessionIds);
+    const sessions = await store.getSdkSessionsBySessionIds(memorySessionIds);
     res.json(sessions);
   });
 
-  private handleGetPromptById = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetPromptById = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const id = this.parseIntParam(req, res, 'id');
     if (id === null) return;
 
     const store = this.dbManager.getSessionStore();
-    const prompts = store.getUserPromptsByIds([id]);
+    const prompts = await store.getUserPromptsByIds([id]);
 
     if (prompts.length === 0) {
       this.notFound(res, `Prompt #${id} not found`);
@@ -202,18 +202,18 @@ export class DataRoutes extends BaseRouteHandler {
     res.json(prompts[0]);
   });
 
-  private handleGetStats = this.wrapHandler((req: Request, res: Response): void => {
-    const db = this.dbManager.getSessionStore().db;
+  private handleGetStats = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
+    const adapter = this.dbManager.getAdapter();
 
     const packageRoot = getPackageRoot();
     const packageJsonPath = path.join(packageRoot, 'package.json');
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
     const version = packageJson.version;
 
-    const totalObservations = db.prepare('SELECT COUNT(*) as count FROM observations').get() as { count: number };
-    const totalSessions = db.prepare('SELECT COUNT(*) as count FROM sdk_sessions').get() as { count: number };
-    const totalSummaries = db.prepare('SELECT COUNT(*) as count FROM session_summaries').get() as { count: number };
-    const firstObservationAt = getFirstObservationCreatedAt(db);
+    const totalObservations = await adapter.get<{ count: number }>('SELECT COUNT(*) as count FROM observations') as { count: number };
+    const totalSessions = await adapter.get<{ count: number }>('SELECT COUNT(*) as count FROM sdk_sessions') as { count: number };
+    const totalSummaries = await adapter.get<{ count: number }>('SELECT COUNT(*) as count FROM session_summaries') as { count: number };
+    const firstObservationAt = await getFirstObservationCreatedAt(adapter);
 
     const dbPath = paths.database();
     let dbSize = 0;
@@ -244,13 +244,13 @@ export class DataRoutes extends BaseRouteHandler {
     });
   });
 
-  private handleGetProjects = this.wrapHandler((req: Request, res: Response): void => {
+  private handleGetProjects = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const store = this.dbManager.getSessionStore();
     const rawPlatformSource = req.query.platformSource as string | undefined;
     const platformSource = rawPlatformSource ? normalizePlatformSource(rawPlatformSource) : undefined;
 
     if (platformSource) {
-      const projects = store.getAllProjects(platformSource);
+      const projects = await store.getAllProjects(platformSource);
       res.json({
         projects,
         sources: [platformSource],
@@ -259,7 +259,7 @@ export class DataRoutes extends BaseRouteHandler {
       return;
     }
 
-    res.json(store.getProjectCatalog());
+    res.json(await store.getProjectCatalog());
   });
 
   private handleGetProcessingStatus = this.wrapHandler((req: Request, res: Response): void => {
@@ -286,7 +286,7 @@ export class DataRoutes extends BaseRouteHandler {
     return { offset, limit, project, platformSource };
   }
 
-  private handleImport = this.wrapHandler((req: Request, res: Response): void => {
+  private handleImport = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { sessions, summaries, observations, prompts } = req.body;
 
     const stats = {
@@ -304,7 +304,7 @@ export class DataRoutes extends BaseRouteHandler {
 
     if (Array.isArray(sessions)) {
       for (const session of sessions) {
-        const result = store.importSdkSession(session);
+        const result = await store.importSdkSession(session);
         if (result.imported) {
           stats.sessionsImported++;
         } else {
@@ -315,7 +315,7 @@ export class DataRoutes extends BaseRouteHandler {
 
     if (Array.isArray(summaries)) {
       for (const summary of summaries) {
-        const result = store.importSessionSummary(summary);
+        const result = await store.importSessionSummary(summary);
         if (result.imported) {
           stats.summariesImported++;
         } else {
@@ -327,7 +327,7 @@ export class DataRoutes extends BaseRouteHandler {
     const importedObservations: Array<{ id: number; obs: typeof observations[0] }> = [];
     if (Array.isArray(observations)) {
       for (const obs of observations) {
-        const result = store.importObservation(obs);
+        const result = await store.importObservation(obs);
         if (result.imported) {
           stats.observationsImported++;
           importedObservations.push({ id: result.id, obs });
@@ -337,7 +337,7 @@ export class DataRoutes extends BaseRouteHandler {
       }
 
       if (stats.observationsImported > 0) {
-        store.rebuildObservationsFTSIndex();
+        await store.rebuildObservationsFTSIndex();
       }
 
       const chromaSync = this.dbManager.getChromaSync();
@@ -386,7 +386,7 @@ export class DataRoutes extends BaseRouteHandler {
 
     if (Array.isArray(prompts)) {
       for (const prompt of prompts) {
-        const result = store.importUserPrompt(prompt);
+        const result = await store.importUserPrompt(prompt);
         if (result.imported) {
           stats.promptsImported++;
         } else {

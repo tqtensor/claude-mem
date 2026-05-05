@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../database/DbAdapter.js';
 import type { PendingMessage } from '../worker-types.js';
 import { logger } from '../../utils/logger.js';
 
@@ -20,18 +20,18 @@ export interface PersistentPendingMessage {
 }
 
 export class PendingMessageStore {
-  private db: Database;
+  private adapter: DbAdapter;
 
   constructor(
-    db: Database,
+    adapter: DbAdapter,
     private onMutate?: () => void
   ) {
-    this.db = db;
+    this.adapter = adapter;
   }
 
-  enqueue(sessionDbId: number, contentSessionId: string, message: PendingMessage): number {
+  async enqueue(sessionDbId: number, contentSessionId: string, message: PendingMessage): Promise<number> {
     const now = Date.now();
-    const stmt = this.db.prepare(`
+    const result = await this.adapter.run(`
       INSERT OR IGNORE INTO pending_messages (
         session_db_id, content_session_id, tool_use_id, message_type,
         tool_name, tool_input, tool_response, cwd,
@@ -39,9 +39,7 @@ export class PendingMessageStore {
         prompt_number, status, created_at_epoch,
         agent_type, agent_id
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
-    `);
-
-    const result = stmt.run(
+    `, [
       sessionDbId,
       contentSessionId,
       message.toolUseId ?? null,
@@ -55,13 +53,13 @@ export class PendingMessageStore {
       now,
       message.agentType ?? null,
       message.agentId ?? null
-    );
+    ]);
 
     this.onMutate?.();
     return result.lastInsertRowid as number;
   }
 
-  claimNextMessage(sessionDbId: number): PersistentPendingMessage | null {
+  async claimNextMessage(sessionDbId: number): Promise<PersistentPendingMessage | null> {
     const sql = `
       UPDATE pending_messages
          SET status = 'processing'
@@ -73,21 +71,21 @@ export class PendingMessageStore {
        )
        RETURNING *
     `;
-    const claimed = this.db.prepare(sql).get(sessionDbId) as PersistentPendingMessage | null;
+    const claimed = await this.adapter.get<PersistentPendingMessage>(sql, [sessionDbId]);
     if (claimed) {
       logger.info('QUEUE', `CLAIMED | sessionDbId=${sessionDbId} | messageId=${claimed.id} | type=${claimed.message_type}`, {
         sessionId: sessionDbId
       });
     }
     this.onMutate?.();
-    return claimed;
+    return claimed ?? null;
   }
 
-  clearPendingForSession(sessionDbId: number): number {
-    const stmt = this.db.prepare(`
+  async clearPendingForSession(sessionDbId: number): Promise<number> {
+    const result = await this.adapter.run(`
       DELETE FROM pending_messages WHERE session_db_id = ?
-    `);
-    const changes = stmt.run(sessionDbId).changes;
+    `, [sessionDbId]);
+    const changes = result.changes ?? 0;
     if (changes > 0) {
       logger.info('QUEUE', `CLEARED | sessionDbId=${sessionDbId} | rowsDeleted=${changes}`, {
         sessionId: sessionDbId
@@ -97,13 +95,13 @@ export class PendingMessageStore {
     return changes;
   }
 
-  resetProcessingToPending(sessionDbId: number): number {
-    const stmt = this.db.prepare(`
+  async resetProcessingToPending(sessionDbId: number): Promise<number> {
+    const result = await this.adapter.run(`
       UPDATE pending_messages
          SET status = 'pending'
        WHERE session_db_id = ? AND status = 'processing'
-    `);
-    const changes = stmt.run(sessionDbId).changes;
+    `, [sessionDbId]);
+    const changes = result.changes ?? 0;
     if (changes > 0) {
       logger.info('QUEUE', `RESET_PROCESSING | sessionDbId=${sessionDbId} | rowsReset=${changes}`, {
         sessionId: sessionDbId
@@ -113,22 +111,20 @@ export class PendingMessageStore {
     return changes;
   }
 
-  getPendingCount(sessionDbId: number): number {
-    const stmt = this.db.prepare(`
+  async getPendingCount(sessionDbId: number): Promise<number> {
+    const result = await this.adapter.get<{ count: number }>(`
       SELECT COUNT(*) as count FROM pending_messages
       WHERE session_db_id = ? AND status IN ('pending', 'processing')
-    `);
-    const result = stmt.get(sessionDbId) as { count: number };
-    return result.count;
+    `, [sessionDbId]);
+    return result?.count ?? 0;
   }
 
-  peekPendingTypes(sessionDbId: number): Array<{ message_type: string; tool_name: string | null }> {
-    const stmt = this.db.prepare(`
+  async peekPendingTypes(sessionDbId: number): Promise<Array<{ message_type: string; tool_name: string | null }>> {
+    return await this.adapter.all<{ message_type: string; tool_name: string | null }>(`
       SELECT message_type, tool_name FROM pending_messages
       WHERE session_db_id = ? AND status IN ('pending', 'processing')
       ORDER BY id ASC
-    `);
-    return stmt.all(sessionDbId) as Array<{ message_type: string; tool_name: string | null }>;
+    `, [sessionDbId]);
   }
 
   toPendingMessage(persistent: PersistentPendingMessage): PendingMessage {

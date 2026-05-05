@@ -13,6 +13,7 @@ export enum LogLevel {
 
 export type Component =
   | 'AGENTS_MD'
+  | 'AUTH'
   | 'BRANCH'
   | 'CHROMA'
   | 'CHROMA_MCP'
@@ -36,6 +37,7 @@ export type Component =
   | 'PROCESS'
   | 'PROJECT_NAME'
   | 'QUEUE'
+  | 'REMOTE'
   | 'SDK'
   | 'SDK_SPAWN'
   | 'SEARCH'

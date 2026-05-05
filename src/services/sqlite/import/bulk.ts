@@ -1,14 +1,13 @@
 
-import { Database } from 'bun:sqlite';
-import { logger } from '../../../utils/logger.js';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 
 export interface ImportResult {
   imported: boolean;
   id: number;
 }
 
-export function importSdkSession(
-  db: Database,
+export async function importSdkSession(
+  adapter: DbAdapter,
   session: {
     content_session_id: string;
     memory_session_id: string;
@@ -20,23 +19,22 @@ export function importSdkSession(
     completed_at_epoch: number | null;
     status: string;
   }
-): ImportResult {
-  const existing = db
-    .prepare('SELECT id FROM sdk_sessions WHERE content_session_id = ?')
-    .get(session.content_session_id) as { id: number } | undefined;
+): Promise<ImportResult> {
+  const existing = await adapter.get<{ id: number }>(
+    'SELECT id FROM sdk_sessions WHERE content_session_id = ?',
+    [session.content_session_id]
+  );
 
   if (existing) {
     return { imported: false, id: existing.id };
   }
 
-  const stmt = db.prepare(`
+  const result = await adapter.run(`
     INSERT INTO sdk_sessions (
       content_session_id, memory_session_id, project, user_prompt,
       started_at, started_at_epoch, completed_at, completed_at_epoch, status
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
+  `, [
     session.content_session_id,
     session.memory_session_id,
     session.project,
@@ -46,13 +44,13 @@ export function importSdkSession(
     session.completed_at,
     session.completed_at_epoch,
     session.status
-  );
+  ]);
 
   return { imported: true, id: result.lastInsertRowid as number };
 }
 
-export function importSessionSummary(
-  db: Database,
+export async function importSessionSummary(
+  adapter: DbAdapter,
   summary: {
     memory_session_id: string;
     project: string;
@@ -69,24 +67,23 @@ export function importSessionSummary(
     created_at: string;
     created_at_epoch: number;
   }
-): ImportResult {
-  const existing = db
-    .prepare('SELECT id FROM session_summaries WHERE memory_session_id = ?')
-    .get(summary.memory_session_id) as { id: number } | undefined;
+): Promise<ImportResult> {
+  const existing = await adapter.get<{ id: number }>(
+    'SELECT id FROM session_summaries WHERE memory_session_id = ?',
+    [summary.memory_session_id]
+  );
 
   if (existing) {
     return { imported: false, id: existing.id };
   }
 
-  const stmt = db.prepare(`
+  const result = await adapter.run(`
     INSERT INTO session_summaries (
       memory_session_id, project, request, investigated, learned,
       completed, next_steps, files_read, files_edited, notes,
       prompt_number, discovery_tokens, created_at, created_at_epoch
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
+  `, [
     summary.memory_session_id,
     summary.project,
     summary.request,
@@ -101,13 +98,13 @@ export function importSessionSummary(
     summary.discovery_tokens || 0,
     summary.created_at,
     summary.created_at_epoch
-  );
+  ]);
 
   return { imported: true, id: result.lastInsertRowid as number };
 }
 
-export function importObservation(
-  db: Database,
+export async function importObservation(
+  adapter: DbAdapter,
   obs: {
     memory_session_id: string;
     project: string;
@@ -127,32 +124,27 @@ export function importObservation(
     agent_type?: string | null;
     agent_id?: string | null;
   }
-): ImportResult {
-  const existing = db
-    .prepare(
-      `
+): Promise<ImportResult> {
+  const existing = await adapter.get<{ id: number }>(
+    `
       SELECT id FROM observations
       WHERE memory_session_id = ? AND title = ? AND created_at_epoch = ?
-    `
-    )
-    .get(obs.memory_session_id, obs.title, obs.created_at_epoch) as
-    | { id: number }
-    | undefined;
+    `,
+    [obs.memory_session_id, obs.title, obs.created_at_epoch]
+  );
 
   if (existing) {
     return { imported: false, id: existing.id };
   }
 
-  const stmt = db.prepare(`
+  const result = await adapter.run(`
     INSERT INTO observations (
       memory_session_id, project, text, type, title, subtitle,
       facts, narrative, concepts, files_read, files_modified,
       prompt_number, discovery_tokens, agent_type, agent_id,
       created_at, created_at_epoch
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
+  `, [
     obs.memory_session_id,
     obs.project,
     obs.text,
@@ -170,13 +162,13 @@ export function importObservation(
     obs.agent_id ?? null,
     obs.created_at,
     obs.created_at_epoch
-  );
+  ]);
 
   return { imported: true, id: result.lastInsertRowid as number };
 }
 
-export function importUserPrompt(
-  db: Database,
+export async function importUserPrompt(
+  adapter: DbAdapter,
   prompt: {
     content_session_id: string;
     prompt_number: number;
@@ -184,36 +176,31 @@ export function importUserPrompt(
     created_at: string;
     created_at_epoch: number;
   }
-): ImportResult {
-  const existing = db
-    .prepare(
-      `
+): Promise<ImportResult> {
+  const existing = await adapter.get<{ id: number }>(
+    `
       SELECT id FROM user_prompts
       WHERE content_session_id = ? AND prompt_number = ?
-    `
-    )
-    .get(prompt.content_session_id, prompt.prompt_number) as
-    | { id: number }
-    | undefined;
+    `,
+    [prompt.content_session_id, prompt.prompt_number]
+  );
 
   if (existing) {
     return { imported: false, id: existing.id };
   }
 
-  const stmt = db.prepare(`
+  const result = await adapter.run(`
     INSERT INTO user_prompts (
       content_session_id, prompt_number, prompt_text,
       created_at, created_at_epoch
     ) VALUES (?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
+  `, [
     prompt.content_session_id,
     prompt.prompt_number,
     prompt.prompt_text,
     prompt.created_at,
     prompt.created_at_epoch
-  );
+  ]);
 
   return { imported: true, id: result.lastInsertRowid as number };
 }

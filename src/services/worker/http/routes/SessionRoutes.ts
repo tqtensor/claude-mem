@@ -65,15 +65,15 @@ export class SessionRoutes extends BaseRouteHandler {
     return (isGeminiSelected() && isGeminiAvailable()) ? 'gemini' : 'claude';
   }
 
-  public ensureGeneratorRunning(sessionDbId: number, source: string): void {
+  public async ensureGeneratorRunning(sessionDbId: number, source: string): Promise<void> {
     const session = this.sessionManager.getSession(sessionDbId);
     if (!session) return;
 
     const selectedProvider = this.getSelectedProvider();
 
     if (!session.generatorPromise) {
-      this.applyTierRouting(session);
-      this.startGeneratorWithProvider(session, selectedProvider, source);
+      await this.applyTierRouting(session);
+      await this.startGeneratorWithProvider(session, selectedProvider, source);
       return;
     }
 
@@ -89,11 +89,11 @@ export class SessionRoutes extends BaseRouteHandler {
     }
   }
 
-  private startGeneratorWithProvider(
+  private async startGeneratorWithProvider(
     session: ReturnType<typeof this.sessionManager.getSession>,
     provider: 'claude' | 'gemini' | 'openrouter',
     source: string
-  ): void {
+  ): Promise<void> {
     if (!session) return;
 
     if (session.abortController.signal.aborted) {
@@ -107,7 +107,7 @@ export class SessionRoutes extends BaseRouteHandler {
     const agentName = provider === 'openrouter' ? 'OpenRouter' : (provider === 'gemini' ? 'Gemini' : 'Claude SDK');
 
     const pendingStore = this.sessionManager.getPendingMessageStore();
-    const actualQueueDepth = pendingStore.getPendingCount(session.sessionDbId);
+    const actualQueueDepth = await pendingStore.getPendingCount(session.sessionDbId);
 
     logger.info('SESSION', `Generator auto-starting (${source}) using ${agentName}`, {
       sessionId: session.sessionDbId,
@@ -121,7 +121,7 @@ export class SessionRoutes extends BaseRouteHandler {
     const myController = session.abortController;
 
     session.generatorPromise = agent.startSession(session, this.workerService)
-      .catch(error => {
+      .catch(async error => {
         if (myController.signal.aborted) {
           logger.debug('HTTP', 'Generator catch: ignoring error after abort', { sessionId: session.sessionDbId });
           return;
@@ -147,7 +147,7 @@ export class SessionRoutes extends BaseRouteHandler {
 
         const pendingStore = this.sessionManager.getPendingMessageStore();
         try {
-          const cleared = pendingStore.clearPendingForSession(session.sessionDbId);
+          const cleared = await pendingStore.clearPendingForSession(session.sessionDbId);
           if (cleared > 0) {
             logger.error('SESSION', `Cleared pending messages after generator error`, {
               sessionId: session.sessionDbId,
@@ -167,9 +167,9 @@ export class SessionRoutes extends BaseRouteHandler {
         await handleGeneratorExit(session, reason, {
           sessionManager: this.sessionManager,
           completionHandler: this.completionHandler,
-          restartGenerator: (s, source) => {
-            this.applyTierRouting(s);
-            this.startGeneratorWithProvider(s, this.getSelectedProvider(), source);
+          restartGenerator: async (s, source) => {
+            await this.applyTierRouting(s);
+            await this.startGeneratorWithProvider(s, this.getSelectedProvider(), source);
           },
         });
       });
@@ -261,7 +261,7 @@ export class SessionRoutes extends BaseRouteHandler {
     res.json({ status: 'queued' });
   });
 
-  private handleSummarizeByClaudeId = this.wrapHandler((req: Request, res: Response): void => {
+  private handleSummarizeByClaudeId = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { contentSessionId, last_assistant_message, agentId } = req.body;
     const platformSource = normalizePlatformSource(req.body.platformSource);
 
@@ -272,10 +272,10 @@ export class SessionRoutes extends BaseRouteHandler {
 
     const store = this.dbManager.getSessionStore();
 
-    const sessionDbId = store.createSDKSession(contentSessionId, '', '', undefined, platformSource);
-    const promptNumber = store.getPromptNumberFromUserPrompts(contentSessionId);
+    const sessionDbId = await store.createSDKSession(contentSessionId, '', '', undefined, platformSource);
+    const promptNumber = await store.getPromptNumberFromUserPrompts(contentSessionId);
 
-    const userPrompt = PrivacyCheckValidator.checkUserPromptPrivacy(
+    const userPrompt = await PrivacyCheckValidator.checkUserPromptPrivacy(
       store,
       contentSessionId,
       promptNumber,
@@ -292,14 +292,14 @@ export class SessionRoutes extends BaseRouteHandler {
       : last_assistant_message;
     this.sessionManager.queueSummarize(sessionDbId, cleanedLastAssistantMessage);
 
-    this.ensureGeneratorRunning(sessionDbId, 'summarize');
+    await this.ensureGeneratorRunning(sessionDbId, 'summarize');
 
     this.eventBroadcaster.broadcastSummarizeQueued();
 
     res.json({ status: 'queued' });
   });
 
-  private handleStatusByClaudeId = this.wrapHandler((req: Request, res: Response): void => {
+  private handleStatusByClaudeId = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const contentSessionId = req.query.contentSessionId as string;
 
     if (!contentSessionId) {
@@ -307,7 +307,7 @@ export class SessionRoutes extends BaseRouteHandler {
     }
 
     const store = this.dbManager.getSessionStore();
-    const sessionDbId = store.createSDKSession(contentSessionId, '', '');
+    const sessionDbId = await store.createSDKSession(contentSessionId, '', '');
     const session = this.sessionManager.getSession(sessionDbId);
 
     if (!session) {
@@ -316,7 +316,7 @@ export class SessionRoutes extends BaseRouteHandler {
     }
 
     const pendingStore = this.sessionManager.getPendingMessageStore();
-    const queueLength = pendingStore.getPendingCount(sessionDbId);
+    const queueLength = await pendingStore.getPendingCount(sessionDbId);
 
     res.json({
       status: 'active',
@@ -327,7 +327,7 @@ export class SessionRoutes extends BaseRouteHandler {
     });
   });
 
-  private handleSessionInitByClaudeId = this.wrapHandler((req: Request, res: Response): void => {
+  private handleSessionInitByClaudeId = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
     const { contentSessionId } = req.body;
 
     const project = req.body.project || 'unknown';
@@ -368,15 +368,15 @@ export class SessionRoutes extends BaseRouteHandler {
 
     const store = this.dbManager.getSessionStore();
 
-    const sessionDbId = store.createSDKSession(contentSessionId, project, prompt, customTitle, platformSource);
+    const sessionDbId = await store.createSDKSession(contentSessionId, project, prompt, customTitle, platformSource);
 
-    const dbSession = store.getSessionById(sessionDbId);
+    const dbSession = await store.getSessionById(sessionDbId);
     const isNewSession = !dbSession?.memory_session_id;
     logger.info('SESSION', `CREATED | contentSessionId=${contentSessionId} → sessionDbId=${sessionDbId} | isNew=${isNewSession} | project=${project}`, {
       sessionId: sessionDbId
     });
 
-    const currentCount = store.getPromptNumberFromUserPrompts(contentSessionId);
+    const currentCount = await store.getPromptNumberFromUserPrompts(contentSessionId);
     const promptNumber = currentCount + 1;
 
     const memorySessionId = dbSession?.memory_session_id || null;
@@ -404,7 +404,7 @@ export class SessionRoutes extends BaseRouteHandler {
       return;
     }
 
-    store.saveUserPrompt(contentSessionId, promptNumber, cleanedPrompt);
+    await store.saveUserPrompt(contentSessionId, promptNumber, cleanedPrompt);
 
     const contextInjected = this.sessionManager.getSession(sessionDbId) !== undefined;
 
@@ -418,7 +418,7 @@ export class SessionRoutes extends BaseRouteHandler {
       const sdkPrompt = cleanedPrompt.startsWith('/') ? cleanedPrompt.substring(1) : cleanedPrompt;
       const session = this.sessionManager.initializeSession(sessionDbId, sdkPrompt, promptNumber);
 
-      const latestPrompt = store.getLatestUserPrompt(session.contentSessionId);
+      const latestPrompt = await store.getLatestUserPrompt(session.contentSessionId);
 
       if (latestPrompt) {
         this.eventBroadcaster.broadcastNewPrompt({
@@ -458,7 +458,7 @@ export class SessionRoutes extends BaseRouteHandler {
         });
       }
 
-      this.ensureGeneratorRunning(sessionDbId, 'init');
+      await this.ensureGeneratorRunning(sessionDbId, 'init');
 
       this.eventBroadcaster.broadcastSessionStarted(sessionDbId, session.project);
     } else {
@@ -478,7 +478,7 @@ export class SessionRoutes extends BaseRouteHandler {
     'Read', 'Glob', 'Grep', 'LS', 'ListMcpResourcesTool'
   ]);
 
-  private applyTierRouting(session: NonNullable<ReturnType<typeof this.sessionManager.getSession>>): void {
+  private async applyTierRouting(session: NonNullable<ReturnType<typeof this.sessionManager.getSession>>): Promise<void> {
     const settings = SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH);
     if (settings.CLAUDE_MEM_TIER_ROUTING_ENABLED === 'false') {
       session.modelOverride = undefined;
@@ -488,7 +488,7 @@ export class SessionRoutes extends BaseRouteHandler {
     session.modelOverride = undefined;
 
     const pendingStore = this.sessionManager.getPendingMessageStore();
-    const pending = pendingStore.peekPendingTypes(session.sessionDbId);
+    const pending = await pendingStore.peekPendingTypes(session.sessionDbId);
 
     if (pending.length === 0) {
       session.modelOverride = undefined;

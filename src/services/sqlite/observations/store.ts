@@ -1,6 +1,6 @@
 
 import { createHash } from 'crypto';
-import { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import { logger } from '../../../utils/logger.js';
 import { getProjectContext } from '../../../utils/project-name.js';
 import type { ObservationInput, StoreObservationResult } from './types.js';
@@ -16,15 +16,15 @@ export function computeObservationContentHash(
     .slice(0, 16);
 }
 
-export function storeObservation(
-  db: Database,
+export async function storeObservation(
+  adapter: DbAdapter,
   memorySessionId: string,
   project: string,
   observation: ObservationInput,
   promptNumber?: number,
   discoveryTokens: number = 0,
   overrideTimestampEpoch?: number
-): StoreObservationResult {
+): Promise<StoreObservationResult> {
   const timestampEpoch = overrideTimestampEpoch ?? Date.now();
   const timestampIso = new Date(timestampEpoch).toISOString();
 
@@ -32,16 +32,14 @@ export function storeObservation(
 
   const contentHash = computeObservationContentHash(memorySessionId, observation.title, observation.narrative);
 
-  const stmt = db.prepare(`
+  const inserted = await adapter.get<{ id: number; created_at_epoch: number }>(`
     INSERT INTO observations
     (memory_session_id, project, type, title, subtitle, facts, narrative, concepts,
      files_read, files_modified, prompt_number, discovery_tokens, agent_type, agent_id, content_hash, created_at, created_at_epoch)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(memory_session_id, content_hash) DO NOTHING
     RETURNING id, created_at_epoch
-  `);
-
-  const inserted = stmt.get(
+  `, [
     memorySessionId,
     resolvedProject,
     observation.type,
@@ -59,15 +57,16 @@ export function storeObservation(
     contentHash,
     timestampIso,
     timestampEpoch
-  ) as { id: number; created_at_epoch: number } | null;
+  ]);
 
   if (inserted) {
     return { id: inserted.id, createdAtEpoch: inserted.created_at_epoch };
   }
 
-  const existing = db.prepare(
-    'SELECT id, created_at_epoch FROM observations WHERE memory_session_id = ? AND content_hash = ?'
-  ).get(memorySessionId, contentHash) as { id: number; created_at_epoch: number } | null;
+  const existing = await adapter.get<{ id: number; created_at_epoch: number }>(
+    'SELECT id, created_at_epoch FROM observations WHERE memory_session_id = ? AND content_hash = ?',
+    [memorySessionId, contentHash]
+  );
 
   if (!existing) {
     throw new Error(

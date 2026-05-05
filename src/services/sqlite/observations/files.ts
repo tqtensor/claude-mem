@@ -1,5 +1,5 @@
 
-import { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import { logger } from '../../../utils/logger.js';
 import type { SessionFilesResult } from './types.js';
 
@@ -13,20 +13,18 @@ export function parseFileList(value: string | null | undefined): string[] {
   }
 }
 
-export function getFilesForSession(
-  db: Database,
+export async function getFilesForSession(
+  adapter: DbAdapter,
   memorySessionId: string
-): SessionFilesResult {
-  const stmt = db.prepare(`
+): Promise<SessionFilesResult> {
+  const rows = await adapter.all<{
+    files_read: string | null;
+    files_modified: string | null;
+  }>(`
     SELECT files_read, files_modified
     FROM observations
     WHERE memory_session_id = ?
-  `);
-
-  const rows = stmt.all(memorySessionId) as Array<{
-    files_read: string | null;
-    files_modified: string | null;
-  }>;
+  `, [memorySessionId]);
 
   const filesReadSet = new Set<string>();
   const filesModifiedSet = new Set<string>();

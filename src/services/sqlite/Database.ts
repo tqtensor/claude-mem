@@ -2,6 +2,8 @@ import { Database } from 'bun:sqlite';
 import { DATA_DIR, DB_PATH, ensureDir } from '../../shared/paths.js';
 import { logger } from '../../utils/logger.js';
 import { MigrationRunner } from './migrations/runner.js';
+import { SqliteAdapter } from '../database/SqliteAdapter.js';
+import type { DbAdapter } from '../database/DbAdapter.js';
 
 const SQLITE_MMAP_SIZE_BYTES = 256 * 1024 * 1024; 
 const SQLITE_CACHE_SIZE_PAGES = 10_000;
@@ -16,6 +18,7 @@ let dbInstance: Database | null = null;
 
 export class ClaudeMemDatabase {
   public db: Database;
+  public adapter: DbAdapter;
 
   constructor(dbPath: string = DB_PATH) {
     if (dbPath !== ':memory:') {
@@ -30,6 +33,8 @@ export class ClaudeMemDatabase {
     this.db.run('PRAGMA temp_store = memory');
     this.db.run(`PRAGMA mmap_size = ${SQLITE_MMAP_SIZE_BYTES}`);
     this.db.run(`PRAGMA cache_size = ${SQLITE_CACHE_SIZE_PAGES}`);
+
+    this.adapter = new SqliteAdapter(this.db);
 
     const migrationRunner = new MigrationRunner(this.db);
     migrationRunner.runAllMigrations();

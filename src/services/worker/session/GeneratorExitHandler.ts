@@ -47,7 +47,7 @@ export async function handleGeneratorExit(
       sessionId: sessionDbId,
       reason
     });
-    pendingStore.clearPendingForSession(sessionDbId);
+    await pendingStore.clearPendingForSession(sessionDbId);
     completionHandler.finalizeSession(sessionDbId);
     sessionManager.removeSessionImmediate(sessionDbId);
     return;
@@ -55,13 +55,13 @@ export async function handleGeneratorExit(
 
   let pendingCount: number;
   try {
-    pendingCount = pendingStore.getPendingCount(sessionDbId);
+    pendingCount = await pendingStore.getPendingCount(sessionDbId);
   } catch (e) {
     const normalized = e instanceof Error ? e : new Error(String(e));
     logger.error('SESSION', 'Error during recovery pending-count check; aborting to prevent leaks', {
       sessionId: sessionDbId
     }, normalized);
-    pendingStore.clearPendingForSession(sessionDbId);
+    await pendingStore.clearPendingForSession(sessionDbId);
     completionHandler.finalizeSession(sessionDbId);
     sessionManager.removeSessionImmediate(sessionDbId);
     return;
@@ -90,7 +90,7 @@ export async function handleGeneratorExit(
       maxConsecutiveFailures: session.restartGuard.maxConsecutiveFailures,
     });
     session.consecutiveRestarts = 0;
-    pendingStore.clearPendingForSession(sessionDbId);
+    await pendingStore.clearPendingForSession(sessionDbId);
     completionHandler.finalizeSession(sessionDbId);
     sessionManager.removeSessionImmediate(sessionDbId);
     return;

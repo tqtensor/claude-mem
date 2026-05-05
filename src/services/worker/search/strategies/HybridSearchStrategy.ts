@@ -51,7 +51,7 @@ export class HybridSearchStrategy extends BaseSearchStrategy implements SearchSt
 
     logger.debug('SEARCH', 'HybridSearchStrategy: findByConcept', { concept });
 
-    const metadataResults = this.sessionSearch.findByConcept(concept, filterOptions);
+    const metadataResults = await this.sessionSearch.findByConcept(concept, filterOptions);
 
     if (metadataResults.length === 0) {
       return this.emptyResult('hybrid');
@@ -72,7 +72,7 @@ export class HybridSearchStrategy extends BaseSearchStrategy implements SearchSt
 
     logger.debug('SEARCH', 'HybridSearchStrategy: findByType', { type: typeStr });
 
-    const metadataResults = this.sessionSearch.findByType(type as any, filterOptions);
+    const metadataResults = await this.sessionSearch.findByType(type as any, filterOptions);
 
     if (metadataResults.length === 0) {
       return this.emptyResult('hybrid');
@@ -96,7 +96,7 @@ export class HybridSearchStrategy extends BaseSearchStrategy implements SearchSt
 
     logger.debug('SEARCH', 'HybridSearchStrategy: findByFile', { filePath });
 
-    const metadataResults = this.sessionSearch.findByFile(filePath, filterOptions);
+    const metadataResults = await this.sessionSearch.findByFile(filePath, filterOptions);
     const sessions = metadataResults.sessions;
 
     if (metadataResults.observations.length === 0) {
@@ -121,7 +121,7 @@ export class HybridSearchStrategy extends BaseSearchStrategy implements SearchSt
     const rankedIds = this.intersectWithRanking(metadataIds, chromaResults.ids);
 
     if (rankedIds.length > 0) {
-      const observations = this.sessionStore.getObservationsByIds(rankedIds, { limit });
+      const observations = await this.sessionStore.getObservationsByIds(rankedIds, { limit });
       observations.sort((a, b) => rankedIds.indexOf(a.id) - rankedIds.indexOf(b.id));
 
       return {
@@ -148,7 +148,7 @@ export class HybridSearchStrategy extends BaseSearchStrategy implements SearchSt
     const rankedIds = this.intersectWithRanking(metadataIds, chromaResults.ids);
 
     if (rankedIds.length > 0) {
-      const observations = this.sessionStore.getObservationsByIds(rankedIds, { limit });
+      const observations = await this.sessionStore.getObservationsByIds(rankedIds, { limit });
       observations.sort((a, b) => rankedIds.indexOf(a.id) - rankedIds.indexOf(b.id));
 
       return { observations, sessions, usedChroma: true };

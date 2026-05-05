@@ -1,5 +1,6 @@
 
-import { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../database/DbAdapter.js';
+import { ClaudeMemDatabase } from '../sqlite/Database.js';
 import { SessionStore } from '../sqlite/SessionStore.js';
 import { SessionSearch } from '../sqlite/SessionSearch.js';
 import { ChromaSync } from '../sync/ChromaSync.js';
@@ -9,16 +10,18 @@ import { logger } from '../../utils/logger.js';
 import type { DBSession } from '../worker-types.js';
 
 export class DatabaseManager {
-  private db: Database | null = null;
+  private database: ClaudeMemDatabase | null = null;
+  private adapter: DbAdapter | null = null;
   private sessionStore: SessionStore | null = null;
   private sessionSearch: SessionSearch | null = null;
   private chromaSync: ChromaSync | null = null;
 
   async initialize(): Promise<void> {
-    this.db = new Database(DB_PATH);
-    
-    this.sessionStore = new SessionStore(this.db);
-    this.sessionSearch = new SessionSearch(this.db);
+    this.database = new ClaudeMemDatabase(DB_PATH);
+    this.adapter = this.database.adapter;
+
+    this.sessionStore = new SessionStore(this.database.db);
+    this.sessionSearch = new SessionSearch(this.database.db);
 
     const settings = SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH);
     const chromaEnabled = settings.CLAUDE_MEM_CHROMA_ENABLED !== 'false';
@@ -40,11 +43,19 @@ export class DatabaseManager {
     this.sessionStore = null;
     this.sessionSearch = null;
 
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (this.adapter) {
+      await this.adapter.close();
+      this.adapter = null;
     }
+    this.database = null;
     logger.info('DB', 'Database closed');
+  }
+
+  getAdapter(): DbAdapter {
+    if (!this.adapter) {
+      throw new Error('Database not initialized');
+    }
+    return this.adapter;
   }
 
   getSessionStore(): SessionStore {

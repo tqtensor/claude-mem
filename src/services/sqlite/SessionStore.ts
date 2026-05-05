@@ -1,12 +1,13 @@
 import { Database, type SQLQueryBindings } from 'bun:sqlite';
 import { DATA_DIR, DB_PATH, ensureDir, OBSERVER_SESSIONS_PROJECT } from '../../shared/paths.js';
 import { logger } from '../../utils/logger.js';
+import { SqliteAdapter } from '../database/SqliteAdapter.js';
+import type { DbAdapter } from '../database/DbAdapter.js';
 import {
   TableColumnInfo,
   IndexInfo,
   TableNameRow,
   SchemaVersion,
-  SdkSessionRecord,
   ObservationRecord,
   SessionSummaryRecord,
   UserPromptRecord,
@@ -30,6 +31,7 @@ function resolveCreateSessionArgs(
 
 export class SessionStore {
   public db: Database;
+  public adapter: DbAdapter;
 
   constructor(dbPathOrDb: string | Database = DB_PATH) {
     if (dbPathOrDb instanceof Database) {
@@ -43,8 +45,10 @@ export class SessionStore {
       this.db.run('PRAGMA journal_mode = WAL');
       this.db.run('PRAGMA synchronous = NORMAL');
       this.db.run('PRAGMA foreign_keys = ON');
-      this.db.run('PRAGMA journal_size_limit = 4194304'); 
+      this.db.run('PRAGMA journal_size_limit = 4194304');
     }
+
+    this.adapter = new SqliteAdapter(this.db);
 
     this.initializeSchema();
 

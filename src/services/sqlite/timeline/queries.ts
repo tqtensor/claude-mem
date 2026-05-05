@@ -1,5 +1,5 @@
 
-import type { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import type { ObservationRecord, SessionSummaryRecord, UserPromptRecord } from '../../../types/database.js';
 import { logger } from '../../../utils/logger.js';
 import { OBSERVER_SESSIONS_PROJECT } from '../../../shared/paths.js';
@@ -27,24 +27,24 @@ export interface TimelineResult {
   }>;
 }
 
-export function getTimelineAroundTimestamp(
-  db: Database,
+export async function getTimelineAroundTimestamp(
+  adapter: DbAdapter,
   anchorEpoch: number,
   depthBefore: number = 10,
   depthAfter: number = 10,
   project?: string
-): TimelineResult {
-  return getTimelineAroundObservation(db, null, anchorEpoch, depthBefore, depthAfter, project);
+): Promise<TimelineResult> {
+  return getTimelineAroundObservation(adapter, null, anchorEpoch, depthBefore, depthAfter, project);
 }
 
-export function getTimelineAroundObservation(
-  db: Database,
+export async function getTimelineAroundObservation(
+  adapter: DbAdapter,
   anchorObservationId: number | null,
   anchorEpoch: number,
   depthBefore: number = 10,
   depthAfter: number = 10,
   project?: string
-): TimelineResult {
+): Promise<TimelineResult> {
   const projectFilter = project ? 'AND project = ?' : '';
   const projectParams = project ? [project] : [];
 
@@ -68,8 +68,8 @@ export function getTimelineAroundObservation(
     `;
 
     try {
-      const beforeRecords = db.prepare(beforeQuery).all(anchorObservationId, ...projectParams, depthBefore + 1) as Array<{id: number; created_at_epoch: number}>;
-      const afterRecords = db.prepare(afterQuery).all(anchorObservationId, ...projectParams, depthAfter + 1) as Array<{id: number; created_at_epoch: number}>;
+      const beforeRecords = await adapter.all<{id: number; created_at_epoch: number}>(beforeQuery, [anchorObservationId, ...projectParams, depthBefore + 1]);
+      const afterRecords = await adapter.all<{id: number; created_at_epoch: number}>(afterQuery, [anchorObservationId, ...projectParams, depthAfter + 1]);
 
       if (beforeRecords.length === 0 && afterRecords.length === 0) {
         return { observations: [], sessions: [], prompts: [] };
@@ -99,8 +99,8 @@ export function getTimelineAroundObservation(
     `;
 
     try {
-      const beforeRecords = db.prepare(beforeQuery).all(anchorEpoch, ...projectParams, depthBefore) as Array<{created_at_epoch: number}>;
-      const afterRecords = db.prepare(afterQuery).all(anchorEpoch, ...projectParams, depthAfter + 1) as Array<{created_at_epoch: number}>;
+      const beforeRecords = await adapter.all<{created_at_epoch: number}>(beforeQuery, [anchorEpoch, ...projectParams, depthBefore]);
+      const afterRecords = await adapter.all<{created_at_epoch: number}>(afterQuery, [anchorEpoch, ...projectParams, depthAfter + 1]);
 
       if (beforeRecords.length === 0 && afterRecords.length === 0) {
         return { observations: [], sessions: [], prompts: [] };
@@ -137,9 +137,9 @@ export function getTimelineAroundObservation(
     ORDER BY up.created_at_epoch ASC
   `;
 
-  const observations = db.prepare(obsQuery).all(startEpoch, endEpoch, ...projectParams) as ObservationRecord[];
-  const sessions = db.prepare(sessQuery).all(startEpoch, endEpoch, ...projectParams) as SessionSummaryRecord[];
-  const prompts = db.prepare(promptQuery).all(startEpoch, endEpoch, ...projectParams) as UserPromptRecord[];
+  const observations = await adapter.all<ObservationRecord>(obsQuery, [startEpoch, endEpoch, ...projectParams]);
+  const sessions = await adapter.all<SessionSummaryRecord>(sessQuery, [startEpoch, endEpoch, ...projectParams]);
+  const prompts = await adapter.all<UserPromptRecord>(promptQuery, [startEpoch, endEpoch, ...projectParams]);
 
   return {
     observations,
@@ -165,15 +165,14 @@ export function getTimelineAroundObservation(
   };
 }
 
-export function getAllProjects(db: Database): string[] {
-  const stmt = db.prepare(`
+export async function getAllProjects(adapter: DbAdapter): Promise<string[]> {
+  const rows = await adapter.all<{ project: string }>(`
     SELECT DISTINCT project
     FROM sdk_sessions
     WHERE project IS NOT NULL AND project != ''
       AND project != ?
     ORDER BY project ASC
-  `);
+  `, [OBSERVER_SESSIONS_PROJECT]);
 
-  const rows = stmt.all(OBSERVER_SESSIONS_PROJECT) as Array<{ project: string }>;
   return rows.map(row => row.project);
 }

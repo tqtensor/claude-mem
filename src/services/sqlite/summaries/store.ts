@@ -1,27 +1,24 @@
-import type { Database } from 'bun:sqlite';
-import { logger } from '../../../utils/logger.js';
+import type { DbAdapter } from '../../database/DbAdapter.js';
 import type { SummaryInput, StoreSummaryResult } from './types.js';
 
-export function storeSummary(
-  db: Database,
+export async function storeSummary(
+  adapter: DbAdapter,
   memorySessionId: string,
   project: string,
   summary: SummaryInput,
   promptNumber?: number,
   discoveryTokens: number = 0,
   overrideTimestampEpoch?: number
-): StoreSummaryResult {
+): Promise<StoreSummaryResult> {
   const timestampEpoch = overrideTimestampEpoch ?? Date.now();
   const timestampIso = new Date(timestampEpoch).toISOString();
 
-  const stmt = db.prepare(`
+  const result = await adapter.run(`
     INSERT INTO session_summaries
     (memory_session_id, project, request, investigated, learned, completed,
      next_steps, notes, prompt_number, discovery_tokens, created_at, created_at_epoch)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const result = stmt.run(
+  `, [
     memorySessionId,
     project,
     summary.request,
@@ -34,7 +31,7 @@ export function storeSummary(
     discoveryTokens,
     timestampIso,
     timestampEpoch
-  );
+  ]);
 
   return {
     id: Number(result.lastInsertRowid),
