@@ -64,6 +64,12 @@ export interface SettingsDefaults {
   CLAUDE_MEM_TELEGRAM_CHAT_ID: string;
   CLAUDE_MEM_TELEGRAM_TRIGGER_TYPES: string;
   CLAUDE_MEM_TELEGRAM_TRIGGER_CONCEPTS: string;
+  CLAUDE_MEM_DB_TYPE: string;
+  CLAUDE_MEM_DATABASE_URL: string;
+  CLAUDE_MEM_REMOTE_URL: string;
+  CLAUDE_MEM_API_KEY: string;
+  CLAUDE_MEM_API_KEYS: string;
+  CLAUDE_MEM_RATE_LIMIT_RPM: string;
 }
 
 export class SettingsDefaultsManager {
@@ -128,6 +134,12 @@ export class SettingsDefaultsManager {
     CLAUDE_MEM_TELEGRAM_CHAT_ID: '',
     CLAUDE_MEM_TELEGRAM_TRIGGER_TYPES: 'security_alert',
     CLAUDE_MEM_TELEGRAM_TRIGGER_CONCEPTS: '',
+    CLAUDE_MEM_DB_TYPE: 'sqlite',
+    CLAUDE_MEM_DATABASE_URL: '',
+    CLAUDE_MEM_REMOTE_URL: '',
+    CLAUDE_MEM_API_KEY: '',
+    CLAUDE_MEM_API_KEYS: '',
+    CLAUDE_MEM_RATE_LIMIT_RPM: '60',
   };
 
   static getAllDefaults(): SettingsDefaults {
