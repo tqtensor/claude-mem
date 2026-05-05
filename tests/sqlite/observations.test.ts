@@ -12,17 +12,19 @@ import {
   updateMemorySessionId,
 } from '../../src/services/sqlite/Sessions.js';
 import type { ObservationInput } from '../../src/services/sqlite/observations/types.js';
-import type { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../src/services/database/DbAdapter.js';
 
 describe('Observations Module', () => {
-  let db: Database;
+  let claudeMemDb: ClaudeMemDatabase;
+  let adapter: DbAdapter;
 
   beforeEach(() => {
-    db = new ClaudeMemDatabase(':memory:').db;
+    claudeMemDb = new ClaudeMemDatabase(':memory:');
+    adapter = claudeMemDb.adapter;
   });
 
   afterEach(() => {
-    db.close();
+    claudeMemDb.db.close();
   });
 
   function createObservationInput(overrides: Partial<ObservationInput> = {}): ObservationInput {
@@ -39,19 +41,19 @@ describe('Observations Module', () => {
     };
   }
 
-  function createSessionWithMemoryId(contentSessionId: string, memorySessionId: string, project: string = 'test-project'): string {
-    const sessionId = createSDKSession(db, contentSessionId, project, 'initial prompt');
-    updateMemorySessionId(db, sessionId, memorySessionId);
+  async function createSessionWithMemoryId(contentSessionId: string, memorySessionId: string, project: string = 'test-project'): Promise<string> {
+    const sessionId = await createSDKSession(adapter, contentSessionId, project, 'initial prompt');
+    await updateMemorySessionId(adapter, sessionId, memorySessionId);
     return memorySessionId;
   }
 
   describe('storeObservation', () => {
-    it('should store observation and return id and createdAtEpoch', () => {
-      const memorySessionId = createSessionWithMemoryId('content-123', 'mem-session-123');
+    it('should store observation and return id and createdAtEpoch', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-123', 'mem-session-123');
       const project = 'test-project';
       const observation = createObservationInput();
 
-      const result = storeObservation(db, memorySessionId, project, observation);
+      const result = await storeObservation(adapter, memorySessionId, project, observation);
 
       expect(typeof result.id).toBe('number');
       expect(result.id).toBeGreaterThan(0);
@@ -59,8 +61,8 @@ describe('Observations Module', () => {
       expect(result.createdAtEpoch).toBeGreaterThan(0);
     });
 
-    it('should store all observation fields correctly', () => {
-      const memorySessionId = createSessionWithMemoryId('content-456', 'mem-session-456');
+    it('should store all observation fields correctly', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-456', 'mem-session-456');
       const project = 'test-project';
       const observation = createObservationInput({
         type: 'bugfix',
@@ -73,9 +75,9 @@ describe('Observations Module', () => {
         files_modified: ['/src/parser.ts', '/tests/parser.test.ts'],
       });
 
-      const result = storeObservation(db, memorySessionId, project, observation, 1, 100);
+      const result = await storeObservation(adapter, memorySessionId, project, observation, 1, 100);
 
-      const stored = getObservationById(db, result.id);
+      const stored = await getObservationById(adapter, result.id);
       expect(stored).not.toBeNull();
       expect(stored?.type).toBe('bugfix');
       expect(stored?.title).toBe('Fixed critical bug');
@@ -83,14 +85,14 @@ describe('Observations Module', () => {
       expect(stored?.project).toBe(project);
     });
 
-    it('should respect overrideTimestampEpoch', () => {
-      const memorySessionId = createSessionWithMemoryId('content-789', 'mem-session-789');
+    it('should respect overrideTimestampEpoch', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-789', 'mem-session-789');
       const project = 'test-project';
       const observation = createObservationInput();
-      const pastTimestamp = 1600000000000; 
+      const pastTimestamp = 1600000000000;
 
-      const result = storeObservation(
-        db,
+      const result = await storeObservation(
+        adapter,
         memorySessionId,
         project,
         observation,
@@ -101,16 +103,16 @@ describe('Observations Module', () => {
 
       expect(result.createdAtEpoch).toBe(pastTimestamp);
 
-      const stored = getObservationById(db, result.id);
+      const stored = await getObservationById(adapter, result.id);
       expect(stored?.created_at_epoch).toBe(pastTimestamp);
       expect(new Date(stored!.created_at).getTime()).toBe(pastTimestamp);
     });
 
-    it('should use current time when overrideTimestampEpoch not provided', () => {
-      const memorySessionId = createSessionWithMemoryId('content-now', 'session-now');
+    it('should use current time when overrideTimestampEpoch not provided', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-now', 'session-now');
       const before = Date.now();
-      const result = storeObservation(
-        db,
+      const result = await storeObservation(
+        adapter,
         memorySessionId,
         'project',
         createObservationInput()
@@ -121,15 +123,15 @@ describe('Observations Module', () => {
       expect(result.createdAtEpoch).toBeLessThanOrEqual(after);
     });
 
-    it('should handle null subtitle and narrative', () => {
-      const memorySessionId = createSessionWithMemoryId('content-null', 'session-null');
+    it('should handle null subtitle and narrative', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-null', 'session-null');
       const observation = createObservationInput({
         subtitle: null,
         narrative: null,
       });
 
-      const result = storeObservation(db, memorySessionId, 'project', observation);
-      const stored = getObservationById(db, result.id);
+      const result = await storeObservation(adapter, memorySessionId, 'project', observation);
+      const stored = await getObservationById(adapter, result.id);
 
       expect(stored).not.toBeNull();
       expect(stored?.id).toBe(result.id);
@@ -137,38 +139,38 @@ describe('Observations Module', () => {
   });
 
   describe('getObservationById', () => {
-    it('should retrieve observation by ID', () => {
-      const memorySessionId = createSessionWithMemoryId('content-get', 'session-get');
+    it('should retrieve observation by ID', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-get', 'session-get');
       const observation = createObservationInput({ title: 'Unique Title' });
-      const result = storeObservation(db, memorySessionId, 'project', observation);
+      const result = await storeObservation(adapter, memorySessionId, 'project', observation);
 
-      const retrieved = getObservationById(db, result.id);
+      const retrieved = await getObservationById(adapter, result.id);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.id).toBe(result.id);
       expect(retrieved?.title).toBe('Unique Title');
     });
 
-    it('should return null for non-existent observation', () => {
-      const retrieved = getObservationById(db, 99999);
+    it('should return null for non-existent observation', async () => {
+      const retrieved = await getObservationById(adapter, 99999);
 
       expect(retrieved).toBeNull();
     });
   });
 
   describe('getRecentObservations', () => {
-    it('should return observations ordered by date DESC', () => {
+    it('should return observations ordered by date DESC', async () => {
       const project = 'test-project';
 
-      const mem1 = createSessionWithMemoryId('content-1', 'session1', project);
-      const mem2 = createSessionWithMemoryId('content-2', 'session2', project);
-      const mem3 = createSessionWithMemoryId('content-3', 'session3', project);
+      const mem1 = await createSessionWithMemoryId('content-1', 'session1', project);
+      const mem2 = await createSessionWithMemoryId('content-2', 'session2', project);
+      const mem3 = await createSessionWithMemoryId('content-3', 'session3', project);
 
-      storeObservation(db, mem1, project, createObservationInput(), 1, 0, 1000000000000);
-      storeObservation(db, mem2, project, createObservationInput(), 2, 0, 2000000000000);
-      storeObservation(db, mem3, project, createObservationInput(), 3, 0, 3000000000000);
+      await storeObservation(adapter, mem1, project, createObservationInput(), 1, 0, 1000000000000);
+      await storeObservation(adapter, mem2, project, createObservationInput(), 2, 0, 2000000000000);
+      await storeObservation(adapter, mem3, project, createObservationInput(), 3, 0, 3000000000000);
 
-      const recent = getRecentObservations(db, project, 10);
+      const recent = await getRecentObservations(adapter, project, 10);
 
       expect(recent.length).toBe(3);
       expect(recent[0].prompt_number).toBe(3);
@@ -176,68 +178,68 @@ describe('Observations Module', () => {
       expect(recent[2].prompt_number).toBe(1);
     });
 
-    it('should respect limit parameter', () => {
+    it('should respect limit parameter', async () => {
       const project = 'test-project';
 
-      const mem1 = createSessionWithMemoryId('content-lim1', 'session-lim1', project);
-      const mem2 = createSessionWithMemoryId('content-lim2', 'session-lim2', project);
-      const mem3 = createSessionWithMemoryId('content-lim3', 'session-lim3', project);
+      const mem1 = await createSessionWithMemoryId('content-lim1', 'session-lim1', project);
+      const mem2 = await createSessionWithMemoryId('content-lim2', 'session-lim2', project);
+      const mem3 = await createSessionWithMemoryId('content-lim3', 'session-lim3', project);
 
-      storeObservation(db, mem1, project, createObservationInput(), 1, 0, 1000000000000);
-      storeObservation(db, mem2, project, createObservationInput(), 2, 0, 2000000000000);
-      storeObservation(db, mem3, project, createObservationInput(), 3, 0, 3000000000000);
+      await storeObservation(adapter, mem1, project, createObservationInput(), 1, 0, 1000000000000);
+      await storeObservation(adapter, mem2, project, createObservationInput(), 2, 0, 2000000000000);
+      await storeObservation(adapter, mem3, project, createObservationInput(), 3, 0, 3000000000000);
 
-      const recent = getRecentObservations(db, project, 2);
+      const recent = await getRecentObservations(adapter, project, 2);
 
       expect(recent.length).toBe(2);
     });
 
-    it('should filter by project', () => {
-      const memA1 = createSessionWithMemoryId('content-a1', 'session-a1', 'project-a');
-      const memB1 = createSessionWithMemoryId('content-b1', 'session-b1', 'project-b');
-      const memA2 = createSessionWithMemoryId('content-a2', 'session-a2', 'project-a');
+    it('should filter by project', async () => {
+      const memA1 = await createSessionWithMemoryId('content-a1', 'session-a1', 'project-a');
+      const memB1 = await createSessionWithMemoryId('content-b1', 'session-b1', 'project-b');
+      const memA2 = await createSessionWithMemoryId('content-a2', 'session-a2', 'project-a');
 
-      storeObservation(db, memA1, 'project-a', createObservationInput());
-      storeObservation(db, memB1, 'project-b', createObservationInput());
-      storeObservation(db, memA2, 'project-a', createObservationInput());
+      await storeObservation(adapter, memA1, 'project-a', createObservationInput());
+      await storeObservation(adapter, memB1, 'project-b', createObservationInput());
+      await storeObservation(adapter, memA2, 'project-a', createObservationInput());
 
-      const recentA = getRecentObservations(db, 'project-a', 10);
-      const recentB = getRecentObservations(db, 'project-b', 10);
+      const recentA = await getRecentObservations(adapter, 'project-a', 10);
+      const recentB = await getRecentObservations(adapter, 'project-b', 10);
 
       expect(recentA.length).toBe(2);
       expect(recentB.length).toBe(1);
     });
 
-    it('should return empty array for project with no observations', () => {
-      const recent = getRecentObservations(db, 'nonexistent-project', 10);
+    it('should return empty array for project with no observations', async () => {
+      const recent = await getRecentObservations(adapter, 'nonexistent-project', 10);
 
       expect(recent).toEqual([]);
     });
   });
 
   describe('getFirstObservationCreatedAt', () => {
-    it('should return null when there are no observations', () => {
-      const result = getFirstObservationCreatedAt(db);
+    it('should return null when there are no observations', async () => {
+      const result = await getFirstObservationCreatedAt(adapter);
 
       expect(result).toBeNull();
     });
 
-    it('should return the earliest observation created_at as ISO string', () => {
+    it('should return the earliest observation created_at as ISO string', async () => {
       const project = 'test-project';
 
-      const memEarly = createSessionWithMemoryId('content-early', 'session-early', project);
-      const memMid = createSessionWithMemoryId('content-mid', 'session-mid', project);
-      const memLate = createSessionWithMemoryId('content-late', 'session-late', project);
+      const memEarly = await createSessionWithMemoryId('content-early', 'session-early', project);
+      const memMid = await createSessionWithMemoryId('content-mid', 'session-mid', project);
+      const memLate = await createSessionWithMemoryId('content-late', 'session-late', project);
 
       const earliestEpoch = 1000000000000;
       const midEpoch = 2000000000000;
       const latestEpoch = 3000000000000;
 
-      storeObservation(db, memMid, project, createObservationInput(), 2, 0, midEpoch);
-      storeObservation(db, memLate, project, createObservationInput(), 3, 0, latestEpoch);
-      storeObservation(db, memEarly, project, createObservationInput(), 1, 0, earliestEpoch);
+      await storeObservation(adapter, memMid, project, createObservationInput(), 2, 0, midEpoch);
+      await storeObservation(adapter, memLate, project, createObservationInput(), 3, 0, latestEpoch);
+      await storeObservation(adapter, memEarly, project, createObservationInput(), 1, 0, earliestEpoch);
 
-      const result = getFirstObservationCreatedAt(db);
+      const result = await getFirstObservationCreatedAt(adapter);
 
       expect(result).not.toBeNull();
       expect(new Date(result!).getTime()).toBe(earliestEpoch);

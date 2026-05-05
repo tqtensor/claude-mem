@@ -6,58 +6,60 @@ import {
   getSessionById,
   updateMemorySessionId,
 } from '../../src/services/sqlite/Sessions.js';
-import type { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../src/services/database/DbAdapter.js';
 
 describe('Sessions Module', () => {
-  let db: Database;
+  let claudeMemDb: ClaudeMemDatabase;
+  let adapter: DbAdapter;
 
   beforeEach(() => {
-    db = new ClaudeMemDatabase(':memory:').db;
+    claudeMemDb = new ClaudeMemDatabase(':memory:');
+    adapter = claudeMemDb.adapter;
   });
 
   afterEach(() => {
-    db.close();
+    claudeMemDb.db.close();
   });
 
   describe('createSDKSession', () => {
-    it('should create a new session and return numeric ID', () => {
+    it('should create a new session and return numeric ID', async () => {
       const contentSessionId = 'content-session-123';
       const project = 'test-project';
       const userPrompt = 'Initial user prompt';
 
-      const sessionId = createSDKSession(db, contentSessionId, project, userPrompt);
+      const sessionId = await createSDKSession(adapter, contentSessionId, project, userPrompt);
 
       expect(typeof sessionId).toBe('number');
       expect(sessionId).toBeGreaterThan(0);
     });
 
-    it('should be idempotent - return same ID for same content_session_id', () => {
+    it('should be idempotent - return same ID for same content_session_id', async () => {
       const contentSessionId = 'content-session-456';
       const project = 'test-project';
       const userPrompt = 'Initial user prompt';
 
-      const sessionId1 = createSDKSession(db, contentSessionId, project, userPrompt);
-      const sessionId2 = createSDKSession(db, contentSessionId, project, 'Different prompt');
+      const sessionId1 = await createSDKSession(adapter, contentSessionId, project, userPrompt);
+      const sessionId2 = await createSDKSession(adapter, contentSessionId, project, 'Different prompt');
 
       expect(sessionId1).toBe(sessionId2);
     });
 
-    it('should create different sessions for different content_session_ids', () => {
-      const sessionId1 = createSDKSession(db, 'session-a', 'project', 'prompt');
-      const sessionId2 = createSDKSession(db, 'session-b', 'project', 'prompt');
+    it('should create different sessions for different content_session_ids', async () => {
+      const sessionId1 = await createSDKSession(adapter, 'session-a', 'project', 'prompt');
+      const sessionId2 = await createSDKSession(adapter, 'session-b', 'project', 'prompt');
 
       expect(sessionId1).not.toBe(sessionId2);
     });
   });
 
   describe('getSessionById', () => {
-    it('should retrieve session by ID', () => {
+    it('should retrieve session by ID', async () => {
       const contentSessionId = 'content-session-get';
       const project = 'test-project';
       const userPrompt = 'Test prompt';
 
-      const sessionId = createSDKSession(db, contentSessionId, project, userPrompt);
-      const session = getSessionById(db, sessionId);
+      const sessionId = await createSDKSession(adapter, contentSessionId, project, userPrompt);
+      const session = await getSessionById(adapter, sessionId);
 
       expect(session).not.toBeNull();
       expect(session?.id).toBe(sessionId);
@@ -67,115 +69,115 @@ describe('Sessions Module', () => {
       expect(session?.memory_session_id).toBeNull();
     });
 
-    it('should return null for non-existent session', () => {
-      const session = getSessionById(db, 99999);
+    it('should return null for non-existent session', async () => {
+      const session = await getSessionById(adapter, 99999);
 
       expect(session).toBeNull();
     });
   });
 
   describe('custom_title', () => {
-    it('should store custom_title when provided at creation', () => {
-      const sessionId = createSDKSession(db, 'session-title-1', 'project', 'prompt', 'My Agent');
-      const session = getSessionById(db, sessionId);
+    it('should store custom_title when provided at creation', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-title-1', 'project', 'prompt', 'My Agent');
+      const session = await getSessionById(adapter, sessionId);
 
       expect(session?.custom_title).toBe('My Agent');
     });
 
-    it('should default custom_title to null when not provided', () => {
-      const sessionId = createSDKSession(db, 'session-title-2', 'project', 'prompt');
-      const session = getSessionById(db, sessionId);
+    it('should default custom_title to null when not provided', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-title-2', 'project', 'prompt');
+      const session = await getSessionById(adapter, sessionId);
 
       expect(session?.custom_title).toBeNull();
     });
 
-    it('should backfill custom_title on idempotent call if not already set', () => {
-      const sessionId = createSDKSession(db, 'session-title-3', 'project', 'prompt');
-      let session = getSessionById(db, sessionId);
+    it('should backfill custom_title on idempotent call if not already set', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-title-3', 'project', 'prompt');
+      let session = await getSessionById(adapter, sessionId);
       expect(session?.custom_title).toBeNull();
 
-      createSDKSession(db, 'session-title-3', 'project', 'prompt', 'Backfilled Title');
-      session = getSessionById(db, sessionId);
+      await createSDKSession(adapter, 'session-title-3', 'project', 'prompt', 'Backfilled Title');
+      session = await getSessionById(adapter, sessionId);
       expect(session?.custom_title).toBe('Backfilled Title');
     });
 
-    it('should not overwrite existing custom_title on idempotent call', () => {
-      const sessionId = createSDKSession(db, 'session-title-4', 'project', 'prompt', 'Original');
-      let session = getSessionById(db, sessionId);
+    it('should not overwrite existing custom_title on idempotent call', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-title-4', 'project', 'prompt', 'Original');
+      let session = await getSessionById(adapter, sessionId);
       expect(session?.custom_title).toBe('Original');
 
-      createSDKSession(db, 'session-title-4', 'project', 'prompt', 'Attempted Override');
-      session = getSessionById(db, sessionId);
+      await createSDKSession(adapter, 'session-title-4', 'project', 'prompt', 'Attempted Override');
+      session = await getSessionById(adapter, sessionId);
       expect(session?.custom_title).toBe('Original');
     });
 
-    it('should handle empty string custom_title as no title', () => {
-      const sessionId = createSDKSession(db, 'session-title-5', 'project', 'prompt', '');
-      const session = getSessionById(db, sessionId);
+    it('should handle empty string custom_title as no title', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-title-5', 'project', 'prompt', '');
+      const session = await getSessionById(adapter, sessionId);
 
       expect(session?.custom_title).toBeNull();
     });
   });
 
   describe('platform_source', () => {
-    it('should default new sessions to claude when platformSource is omitted', () => {
-      const sessionId = createSDKSession(db, 'session-platform-1', 'project', 'prompt');
-      const session = getSessionById(db, sessionId);
+    it('should default new sessions to claude when platformSource is omitted', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-platform-1', 'project', 'prompt');
+      const session = await getSessionById(adapter, sessionId);
 
       expect(session?.platform_source).toBe('claude');
     });
 
-    it('should preserve a non-default platform_source for legacy callers that omit platformSource', () => {
-      const sessionId = createSDKSession(db, 'session-platform-2', 'project', 'prompt', undefined, 'codex');
-      let session = getSessionById(db, sessionId);
+    it('should preserve a non-default platform_source for legacy callers that omit platformSource', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-platform-2', 'project', 'prompt', undefined, 'codex');
+      let session = await getSessionById(adapter, sessionId);
       expect(session?.platform_source).toBe('codex');
 
-      createSDKSession(db, 'session-platform-2', 'project', 'prompt');
-      session = getSessionById(db, sessionId);
+      await createSDKSession(adapter, 'session-platform-2', 'project', 'prompt');
+      session = await getSessionById(adapter, sessionId);
       expect(session?.platform_source).toBe('codex');
     });
 
-    it('should reject explicit platform_source conflicts for the same session', () => {
-      createSDKSession(db, 'session-platform-3', 'project', 'prompt', undefined, 'codex');
+    it('should reject explicit platform_source conflicts for the same session', async () => {
+      await createSDKSession(adapter, 'session-platform-3', 'project', 'prompt', undefined, 'codex');
 
-      expect(() => createSDKSession(
-        db,
+      await expect(createSDKSession(
+        adapter,
         'session-platform-3',
         'project',
         'prompt',
         undefined,
         'claude'
-      )).toThrow(/Platform source conflict/);
+      )).rejects.toThrow(/Platform source conflict/);
     });
   });
 
   describe('updateMemorySessionId', () => {
-    it('should update memory_session_id for existing session', () => {
+    it('should update memory_session_id for existing session', async () => {
       const contentSessionId = 'content-session-update';
       const project = 'test-project';
       const userPrompt = 'Test prompt';
       const memorySessionId = 'memory-session-abc123';
 
-      const sessionId = createSDKSession(db, contentSessionId, project, userPrompt);
+      const sessionId = await createSDKSession(adapter, contentSessionId, project, userPrompt);
 
-      let session = getSessionById(db, sessionId);
+      let session = await getSessionById(adapter, sessionId);
       expect(session?.memory_session_id).toBeNull();
 
-      updateMemorySessionId(db, sessionId, memorySessionId);
+      await updateMemorySessionId(adapter, sessionId, memorySessionId);
 
-      session = getSessionById(db, sessionId);
+      session = await getSessionById(adapter, sessionId);
       expect(session?.memory_session_id).toBe(memorySessionId);
     });
 
-    it('should allow updating to different memory_session_id', () => {
-      const sessionId = createSDKSession(db, 'session-x', 'project', 'prompt');
+    it('should allow updating to different memory_session_id', async () => {
+      const sessionId = await createSDKSession(adapter, 'session-x', 'project', 'prompt');
 
-      updateMemorySessionId(db, sessionId, 'memory-1');
-      let session = getSessionById(db, sessionId);
+      await updateMemorySessionId(adapter, sessionId, 'memory-1');
+      let session = await getSessionById(adapter, sessionId);
       expect(session?.memory_session_id).toBe('memory-1');
 
-      updateMemorySessionId(db, sessionId, 'memory-2');
-      session = getSessionById(db, sessionId);
+      await updateMemorySessionId(adapter, sessionId, 'memory-2');
+      session = await getSessionById(adapter, sessionId);
       expect(session?.memory_session_id).toBe('memory-2');
     });
   });

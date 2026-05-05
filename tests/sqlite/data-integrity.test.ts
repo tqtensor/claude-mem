@@ -13,6 +13,7 @@ import { storeObservations } from '../../src/services/sqlite/transactions.js';
 import { PendingMessageStore } from '../../src/services/sqlite/PendingMessageStore.js';
 import type { ObservationInput } from '../../src/services/sqlite/observations/types.js';
 import type { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../src/services/database/DbAdapter.js';
 
 function createObservationInput(overrides: Partial<ObservationInput> = {}): ObservationInput {
   return {
@@ -28,17 +29,21 @@ function createObservationInput(overrides: Partial<ObservationInput> = {}): Obse
   };
 }
 
-function createSessionWithMemoryId(db: Database, contentSessionId: string, memorySessionId: string, project: string = 'test-project'): string {
-  const sessionId = createSDKSession(db, contentSessionId, project, 'initial prompt');
-  updateMemorySessionId(db, sessionId, memorySessionId);
+async function createSessionWithMemoryId(adapter: DbAdapter, contentSessionId: string, memorySessionId: string, project: string = 'test-project'): Promise<string> {
+  const sessionId = await createSDKSession(adapter, contentSessionId, project, 'initial prompt');
+  await updateMemorySessionId(adapter, sessionId, memorySessionId);
   return memorySessionId;
 }
 
 describe('TRIAGE-03: Data Integrity', () => {
+  let claudeMemDb: ClaudeMemDatabase;
   let db: Database;
+  let adapter: DbAdapter;
 
   beforeEach(() => {
-    db = new ClaudeMemDatabase(':memory:').db;
+    claudeMemDb = new ClaudeMemDatabase(':memory:');
+    db = claudeMemDb.db;
+    adapter = claudeMemDb.adapter;
   });
 
   afterEach(() => {
@@ -73,45 +78,45 @@ describe('TRIAGE-03: Data Integrity', () => {
       expect(hashes.size).toBe(4);
     });
 
-    it('storeObservation deduplicates identical observations within 30s window', () => {
-      const memId = createSessionWithMemoryId(db, 'content-dedup-1', 'mem-dedup-1');
+    it('storeObservation deduplicates identical observations within 30s window', async () => {
+      const memId = await createSessionWithMemoryId(adapter, 'content-dedup-1', 'mem-dedup-1');
       const obs = createObservationInput({ title: 'Same Title', narrative: 'Same Narrative' });
 
       const now = Date.now();
-      const result1 = storeObservation(db, memId, 'test-project', obs, 1, 0, now);
-      const result2 = storeObservation(db, memId, 'test-project', obs, 1, 0, now + 1000);
+      const result1 = await storeObservation(adapter, memId, 'test-project', obs, 1, 0, now);
+      const result2 = await storeObservation(adapter, memId, 'test-project', obs, 1, 0, now + 1000);
 
       expect(result2.id).toBe(result1.id);
     });
 
-    it('storeObservation deduplicates identical content regardless of time gap (UNIQUE constraint)', () => {
-      const memId = createSessionWithMemoryId(db, 'content-dedup-2', 'mem-dedup-2');
+    it('storeObservation deduplicates identical content regardless of time gap (UNIQUE constraint)', async () => {
+      const memId = await createSessionWithMemoryId(adapter, 'content-dedup-2', 'mem-dedup-2');
       const obs = createObservationInput({ title: 'Same Title', narrative: 'Same Narrative' });
 
       const now = Date.now();
-      const result1 = storeObservation(db, memId, 'test-project', obs, 1, 0, now);
-      const result2 = storeObservation(db, memId, 'test-project', obs, 1, 0, now + 31_000);
+      const result1 = await storeObservation(adapter, memId, 'test-project', obs, 1, 0, now);
+      const result2 = await storeObservation(adapter, memId, 'test-project', obs, 1, 0, now + 31_000);
 
       expect(result2.id).toBe(result1.id);
     });
 
-    it('storeObservation allows different content at same time', () => {
-      const memId = createSessionWithMemoryId(db, 'content-dedup-3', 'mem-dedup-3');
+    it('storeObservation allows different content at same time', async () => {
+      const memId = await createSessionWithMemoryId(adapter, 'content-dedup-3', 'mem-dedup-3');
       const obs1 = createObservationInput({ title: 'Title A', narrative: 'Narrative A' });
       const obs2 = createObservationInput({ title: 'Title B', narrative: 'Narrative B' });
 
       const now = Date.now();
-      const result1 = storeObservation(db, memId, 'test-project', obs1, 1, 0, now);
-      const result2 = storeObservation(db, memId, 'test-project', obs2, 1, 0, now);
+      const result1 = await storeObservation(adapter, memId, 'test-project', obs1, 1, 0, now);
+      const result2 = await storeObservation(adapter, memId, 'test-project', obs2, 1, 0, now);
 
       expect(result2.id).not.toBe(result1.id);
     });
 
-    it('content_hash column is populated on new observations', () => {
-      const memId = createSessionWithMemoryId(db, 'content-hash-col', 'mem-hash-col');
+    it('content_hash column is populated on new observations', async () => {
+      const memId = await createSessionWithMemoryId(adapter, 'content-hash-col', 'mem-hash-col');
       const obs = createObservationInput();
 
-      storeObservation(db, memId, 'test-project', obs);
+      await storeObservation(adapter, memId, 'test-project', obs);
 
       const row = db.prepare('SELECT content_hash FROM observations LIMIT 1').get() as { content_hash: string };
       expect(row.content_hash).toBeTruthy();
@@ -120,11 +125,11 @@ describe('TRIAGE-03: Data Integrity', () => {
   });
 
   describe('Transaction-level deduplication', () => {
-    it('storeObservations deduplicates within a batch', () => {
-      const memId = createSessionWithMemoryId(db, 'content-tx-1', 'mem-tx-1');
+    it('storeObservations deduplicates within a batch', async () => {
+      const memId = await createSessionWithMemoryId(adapter, 'content-tx-1', 'mem-tx-1');
       const obs = createObservationInput({ title: 'Duplicate', narrative: 'Same content' });
 
-      const result = storeObservations(db, memId, 'test-project', [obs, obs, obs], null);
+      const result = await storeObservations(adapter, memId, 'test-project', [obs, obs, obs], null);
 
       expect(result.observationIds.length).toBe(3);
       expect(result.observationIds[1]).toBe(result.observationIds[0]);
@@ -136,11 +141,11 @@ describe('TRIAGE-03: Data Integrity', () => {
   });
 
   describe('Empty project string guard', () => {
-    it('storeObservation replaces empty project with cwd-derived name', () => {
-      const memId = createSessionWithMemoryId(db, 'content-empty-proj', 'mem-empty-proj');
+    it('storeObservation replaces empty project with cwd-derived name', async () => {
+      const memId = await createSessionWithMemoryId(adapter, 'content-empty-proj', 'mem-empty-proj');
       const obs = createObservationInput();
 
-      const result = storeObservation(db, memId, '', obs);
+      const result = await storeObservation(adapter, memId, '', obs);
       const row = db.prepare('SELECT project FROM observations WHERE id = ?').get(result.id) as { project: string };
 
       expect(row.project).toBeTruthy();
@@ -151,8 +156,8 @@ describe('TRIAGE-03: Data Integrity', () => {
   describe('hasAnyPendingWork', () => {
 
     it('hasAnyPendingWork returns false when no pending or processing messages exist', () => {
-      const pendingStore = new PendingMessageStore(db);
-      expect(pendingStore.hasAnyPendingWork()).toBe(false);
+      const pendingStore = new PendingMessageStore(adapter);
+      expect((pendingStore as any).hasAnyPendingWork()).toBe(false);
     });
   });
 });

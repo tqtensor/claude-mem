@@ -10,17 +10,19 @@ import {
   updateMemorySessionId,
 } from '../../src/services/sqlite/Sessions.js';
 import type { SummaryInput } from '../../src/services/sqlite/summaries/types.js';
-import type { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../src/services/database/DbAdapter.js';
 
 describe('Summaries Module', () => {
-  let db: Database;
+  let claudeMemDb: ClaudeMemDatabase;
+  let adapter: DbAdapter;
 
   beforeEach(() => {
-    db = new ClaudeMemDatabase(':memory:').db;
+    claudeMemDb = new ClaudeMemDatabase(':memory:');
+    adapter = claudeMemDb.adapter;
   });
 
   afterEach(() => {
-    db.close();
+    claudeMemDb.db.close();
   });
 
   function createSummaryInput(overrides: Partial<SummaryInput> = {}): SummaryInput {
@@ -35,19 +37,19 @@ describe('Summaries Module', () => {
     };
   }
 
-  function createSessionWithMemoryId(contentSessionId: string, memorySessionId: string, project: string = 'test-project'): string {
-    const sessionId = createSDKSession(db, contentSessionId, project, 'initial prompt');
-    updateMemorySessionId(db, sessionId, memorySessionId);
+  async function createSessionWithMemoryId(contentSessionId: string, memorySessionId: string, project: string = 'test-project'): Promise<string> {
+    const sessionId = await createSDKSession(adapter, contentSessionId, project, 'initial prompt');
+    await updateMemorySessionId(adapter, sessionId, memorySessionId);
     return memorySessionId;
   }
 
   describe('storeSummary', () => {
-    it('should store summary and return id and createdAtEpoch', () => {
-      const memorySessionId = createSessionWithMemoryId('content-sum-123', 'mem-session-sum-123');
+    it('should store summary and return id and createdAtEpoch', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-sum-123', 'mem-session-sum-123');
       const project = 'test-project';
       const summary = createSummaryInput();
 
-      const result = storeSummary(db, memorySessionId, project, summary);
+      const result = await storeSummary(adapter, memorySessionId, project, summary);
 
       expect(typeof result.id).toBe('number');
       expect(result.id).toBeGreaterThan(0);
@@ -55,8 +57,8 @@ describe('Summaries Module', () => {
       expect(result.createdAtEpoch).toBeGreaterThan(0);
     });
 
-    it('should store all summary fields correctly', () => {
-      const memorySessionId = createSessionWithMemoryId('content-sum-456', 'mem-session-sum-456');
+    it('should store all summary fields correctly', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-sum-456', 'mem-session-sum-456');
       const project = 'test-project';
       const summary = createSummaryInput({
         request: 'Refactor the database layer',
@@ -67,9 +69,9 @@ describe('Summaries Module', () => {
         notes: 'May need caching',
       });
 
-      const result = storeSummary(db, memorySessionId, project, summary, 1, 500);
+      const result = await storeSummary(adapter, memorySessionId, project, summary, 1, 500);
 
-      const stored = getSummaryForSession(db, memorySessionId);
+      const stored = await getSummaryForSession(adapter, memorySessionId);
       expect(stored).not.toBeNull();
       expect(stored?.request).toBe('Refactor the database layer');
       expect(stored?.investigated).toBe('Analyzed current schema');
@@ -80,14 +82,14 @@ describe('Summaries Module', () => {
       expect(stored?.prompt_number).toBe(1);
     });
 
-    it('should respect overrideTimestampEpoch', () => {
-      const memorySessionId = createSessionWithMemoryId('content-sum-789', 'mem-session-sum-789');
+    it('should respect overrideTimestampEpoch', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-sum-789', 'mem-session-sum-789');
       const project = 'test-project';
       const summary = createSummaryInput();
-      const pastTimestamp = 1650000000000; 
+      const pastTimestamp = 1650000000000;
 
-      const result = storeSummary(
-        db,
+      const result = await storeSummary(
+        adapter,
         memorySessionId,
         project,
         summary,
@@ -98,15 +100,15 @@ describe('Summaries Module', () => {
 
       expect(result.createdAtEpoch).toBe(pastTimestamp);
 
-      const stored = getSummaryForSession(db, memorySessionId);
+      const stored = await getSummaryForSession(adapter, memorySessionId);
       expect(stored?.created_at_epoch).toBe(pastTimestamp);
     });
 
-    it('should use current time when overrideTimestampEpoch not provided', () => {
-      const memorySessionId = createSessionWithMemoryId('content-sum-now', 'session-sum-now');
+    it('should use current time when overrideTimestampEpoch not provided', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-sum-now', 'session-sum-now');
       const before = Date.now();
-      const result = storeSummary(
-        db,
+      const result = await storeSummary(
+        adapter,
         memorySessionId,
         'project',
         createSummaryInput()
@@ -117,12 +119,12 @@ describe('Summaries Module', () => {
       expect(result.createdAtEpoch).toBeLessThanOrEqual(after);
     });
 
-    it('should handle null notes', () => {
-      const memorySessionId = createSessionWithMemoryId('content-sum-null', 'session-sum-null');
+    it('should handle null notes', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-sum-null', 'session-sum-null');
       const summary = createSummaryInput({ notes: null });
 
-      const result = storeSummary(db, memorySessionId, 'project', summary);
-      const stored = getSummaryForSession(db, memorySessionId);
+      await storeSummary(adapter, memorySessionId, 'project', summary);
+      const stored = await getSummaryForSession(adapter, memorySessionId);
 
       expect(stored).not.toBeNull();
       expect(stored?.notes).toBeNull();
@@ -130,29 +132,29 @@ describe('Summaries Module', () => {
   });
 
   describe('getSummaryForSession', () => {
-    it('should retrieve summary by memory_session_id', () => {
-      const memorySessionId = createSessionWithMemoryId('content-unique', 'unique-mem-session');
+    it('should retrieve summary by memory_session_id', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-unique', 'unique-mem-session');
       const summary = createSummaryInput({ request: 'Unique request' });
 
-      storeSummary(db, memorySessionId, 'project', summary);
+      await storeSummary(adapter, memorySessionId, 'project', summary);
 
-      const retrieved = getSummaryForSession(db, memorySessionId);
+      const retrieved = await getSummaryForSession(adapter, memorySessionId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.request).toBe('Unique request');
     });
 
-    it('should return null for session with no summary', () => {
-      const retrieved = getSummaryForSession(db, 'nonexistent-session');
+    it('should return null for session with no summary', async () => {
+      const retrieved = await getSummaryForSession(adapter, 'nonexistent-session');
 
       expect(retrieved).toBeNull();
     });
 
-    it('should return most recent summary when multiple exist', () => {
-      const memorySessionId = createSessionWithMemoryId('content-multi', 'multi-summary-session');
+    it('should return most recent summary when multiple exist', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-multi', 'multi-summary-session');
 
-      storeSummary(
-        db,
+      await storeSummary(
+        adapter,
         memorySessionId,
         'project',
         createSummaryInput({ request: 'First request' }),
@@ -161,8 +163,8 @@ describe('Summaries Module', () => {
         1000000000000
       );
 
-      storeSummary(
-        db,
+      await storeSummary(
+        adapter,
         memorySessionId,
         'project',
         createSummaryInput({ request: 'Second request' }),
@@ -171,20 +173,20 @@ describe('Summaries Module', () => {
         2000000000000
       );
 
-      const retrieved = getSummaryForSession(db, memorySessionId);
+      const retrieved = await getSummaryForSession(adapter, memorySessionId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.request).toBe('Second request');
       expect(retrieved?.prompt_number).toBe(2);
     });
 
-    it('should return summary with all expected fields', () => {
-      const memorySessionId = createSessionWithMemoryId('content-fields', 'fields-check-session');
+    it('should return summary with all expected fields', async () => {
+      const memorySessionId = await createSessionWithMemoryId('content-fields', 'fields-check-session');
       const summary = createSummaryInput();
 
-      storeSummary(db, memorySessionId, 'project', summary, 1, 100, 1500000000000);
+      await storeSummary(adapter, memorySessionId, 'project', summary, 1, 100, 1500000000000);
 
-      const retrieved = getSummaryForSession(db, memorySessionId);
+      const retrieved = await getSummaryForSession(adapter, memorySessionId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved).toHaveProperty('request');

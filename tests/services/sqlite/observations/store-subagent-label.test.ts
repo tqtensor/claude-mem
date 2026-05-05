@@ -7,12 +7,17 @@ import {
 } from '../../../../src/services/sqlite/Sessions.js';
 import type { ObservationInput } from '../../../../src/services/sqlite/observations/types.js';
 import type { Database } from 'bun:sqlite';
+import type { DbAdapter } from '../../../../src/services/database/DbAdapter.js';
 
 describe('storeObservation — subagent labeling', () => {
+  let claudeMemDb: ClaudeMemDatabase;
   let db: Database;
+  let adapter: DbAdapter;
 
   beforeEach(() => {
-    db = new ClaudeMemDatabase(':memory:').db;
+    claudeMemDb = new ClaudeMemDatabase(':memory:');
+    db = claudeMemDb.db;
+    adapter = claudeMemDb.adapter;
   });
 
   afterEach(() => {
@@ -33,24 +38,24 @@ describe('storeObservation — subagent labeling', () => {
     };
   }
 
-  function createSessionWithMemoryId(
+  async function createSessionWithMemoryId(
     contentSessionId: string,
     memorySessionId: string,
     project = 'test-project'
-  ): string {
-    const sessionId = createSDKSession(db, contentSessionId, project, 'initial prompt');
-    updateMemorySessionId(db, sessionId, memorySessionId);
+  ): Promise<string> {
+    const sessionId = await createSDKSession(adapter, contentSessionId, project, 'initial prompt');
+    await updateMemorySessionId(adapter, sessionId, memorySessionId);
     return memorySessionId;
   }
 
-  it('stores agent_type and agent_id when provided', () => {
-    const memorySessionId = createSessionWithMemoryId('content-sub-1', 'mem-sub-1');
+  it('stores agent_type and agent_id when provided', async () => {
+    const memorySessionId = await createSessionWithMemoryId('content-sub-1', 'mem-sub-1');
     const input = createObservationInput({
       agent_type: 'Explore',
       agent_id: 'agent-abc',
     });
 
-    const result = storeObservation(db, memorySessionId, 'test-project', input);
+    const result = await storeObservation(adapter, memorySessionId, 'test-project', input);
 
     const row = db
       .prepare('SELECT agent_type, agent_id FROM observations WHERE id = ?')
@@ -61,11 +66,11 @@ describe('storeObservation — subagent labeling', () => {
     expect(row.agent_id).toBe('agent-abc');
   });
 
-  it('stores NULL for agent_type and agent_id when fields are omitted (main-session row)', () => {
-    const memorySessionId = createSessionWithMemoryId('content-main-1', 'mem-main-1');
+  it('stores NULL for agent_type and agent_id when fields are omitted (main-session row)', async () => {
+    const memorySessionId = await createSessionWithMemoryId('content-main-1', 'mem-main-1');
     const input = createObservationInput();
 
-    const result = storeObservation(db, memorySessionId, 'test-project', input);
+    const result = await storeObservation(adapter, memorySessionId, 'test-project', input);
 
     const row = db
       .prepare('SELECT agent_type, agent_id FROM observations WHERE id = ?')
@@ -76,14 +81,14 @@ describe('storeObservation — subagent labeling', () => {
     expect(row.agent_id).toBeNull();
   });
 
-  it('stores agent_type only when agent_id is absent', () => {
-    const memorySessionId = createSessionWithMemoryId('content-partial-1', 'mem-partial-1');
+  it('stores agent_type only when agent_id is absent', async () => {
+    const memorySessionId = await createSessionWithMemoryId('content-partial-1', 'mem-partial-1');
     const input = createObservationInput({
       agent_type: 'Plan',
       // agent_id intentionally omitted
     });
 
-    const result = storeObservation(db, memorySessionId, 'test-project', input);
+    const result = await storeObservation(adapter, memorySessionId, 'test-project', input);
 
     const row = db
       .prepare('SELECT agent_type, agent_id FROM observations WHERE id = ?')
@@ -93,11 +98,11 @@ describe('storeObservation — subagent labeling', () => {
     expect(row.agent_id).toBeNull();
   });
 
-  it('dedup is NOT affected by agent fields — second insert with different agent_type returns existing id', () => {
-    const memorySessionId = createSessionWithMemoryId('content-dedup-1', 'mem-dedup-1');
+  it('dedup is NOT affected by agent fields — second insert with different agent_type returns existing id', async () => {
+    const memorySessionId = await createSessionWithMemoryId('content-dedup-1', 'mem-dedup-1');
 
-    const first = storeObservation(
-      db,
+    const first = await storeObservation(
+      adapter,
       memorySessionId,
       'test-project',
       createObservationInput({
@@ -108,8 +113,8 @@ describe('storeObservation — subagent labeling', () => {
       })
     );
 
-    const second = storeObservation(
-      db,
+    const second = await storeObservation(
+      adapter,
       memorySessionId,
       'test-project',
       createObservationInput({
