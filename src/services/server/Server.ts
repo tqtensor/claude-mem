@@ -13,6 +13,7 @@ import { ENV_PREFIXES, ENV_EXACT_MATCHES } from '../../supervisor/env-sanitizer.
 import { flushResponseThen } from './flushResponseThen.js';
 import { getUptimeSeconds } from '../../shared/uptime.js';
 import { globalRateLimitStore } from '../worker/RateLimitStore.js';
+import { createAuthMiddleware, isAuthEnabled } from '../worker/http/middleware/auth.js';
 
 const INSTRUCTIONS_BASE_DIR: string = path.resolve(__dirname, '../skills/mem-search');
 const INSTRUCTIONS_OPERATIONS_DIR: string = path.join(INSTRUCTIONS_BASE_DIR, 'operations');
@@ -155,10 +156,15 @@ export class Server {
   private setupMiddleware(): void {
     const middlewares = createMiddleware(summarizeRequestBody);
     middlewares.forEach(mw => this.app.use(mw));
+    this.app.use(createAuthMiddleware());
   }
 
   private setupCoreRoutes(): void {
-    this.app.get('/api/health', (_req: Request, res: Response) => {
+    this.app.get('/api/health', (req: Request, res: Response) => {
+      if (isAuthEnabled() && !req.userId) {
+        res.status(200).json({ status: 'ok' });
+        return;
+      }
       res.status(200).json({
         status: 'ok',
         version: BUILT_IN_VERSION,
