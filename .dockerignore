@@ -5,3 +5,8 @@ evals/swebench/runs/
 .docker-claude-mem-data/
 .venv
 .venv-*
+src/
+dist/
+*.test.ts
+evals/
+ragtime/
