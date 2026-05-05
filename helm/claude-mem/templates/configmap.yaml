@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "claude-mem.fullname" . }}-config
+  labels:
+    {{- include "claude-mem.labels" . | nindent 4 }}
+data:
+  CLAUDE_MEM_DB_TYPE: {{ .Values.database.type | quote }}
+  CLAUDE_MEM_WORKER_PORT: {{ .Values.worker.port | quote }}
+  CLAUDE_MEM_WORKER_HOST: "0.0.0.0"
+  CLAUDE_MEM_DATA_DIR: "/data"
+  CLAUDE_MEM_CHROMA_MODE: "remote"
+  CLAUDE_MEM_CHROMA_HOST: {{ include "claude-mem.chromaHost" . | quote }}
+  CLAUDE_MEM_CHROMA_PORT: {{ .Values.chroma.port | quote }}
+  CLAUDE_MEM_RATE_LIMIT_RPM: {{ .Values.auth.rateLimitRpm | quote }}

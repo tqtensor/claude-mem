@@ -1,0 +1,11 @@
+apiVersion: v2
+name: claude-mem
+description: Persistent memory server for Claude Code teams
+type: application
+version: 0.1.0
+appVersion: "12.6.2"
+dependencies:
+  - name: postgresql
+    version: ">=15.0.0 <17.0.0"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled

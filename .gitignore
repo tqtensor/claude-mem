@@ -49,3 +49,6 @@ logs/run_evaluation/
 .docker-blowout-data/
 .scratch/
 docker/install-test/
+
+# Helm dependency tarballs (rebuilt via `helm dependency update`)
+helm/*/charts/*.tgz

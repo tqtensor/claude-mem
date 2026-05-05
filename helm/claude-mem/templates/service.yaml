@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "claude-mem.fullname" . }}
+  labels:
+    {{- include "claude-mem.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - name: http
+      port: {{ .Values.worker.port }}
+      targetPort: {{ .Values.worker.port }}
+      protocol: TCP
+  selector:
+    {{- include "claude-mem.selectorLabels" . | nindent 4 }}

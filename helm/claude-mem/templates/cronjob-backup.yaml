@@ -1,0 +1,60 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "claude-mem.fullname" . }}-backup
+  labels:
+    {{- include "claude-mem.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: {{ .Values.backup.image }}
+              env:
+                - name: PGHOST
+                  value: {{ if .Values.postgresql.enabled }}{{ printf "%s-postgresql" .Release.Name | quote }}{{ else }}{{ .Values.database.host | quote }}{{ end }}
+                - name: PGPORT
+                  value: {{ if .Values.postgresql.enabled }}"5432"{{ else }}{{ .Values.database.port | quote }}{{ end }}
+                - name: PGDATABASE
+                  value: {{ if .Values.postgresql.enabled }}{{ .Values.postgresql.auth.database | quote }}{{ else }}{{ .Values.database.name | quote }}{{ end }}
+                - name: PGUSER
+                  value: {{ if .Values.postgresql.enabled }}{{ .Values.postgresql.auth.username | quote }}{{ else }}{{ .Values.database.user | quote }}{{ end }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ include "claude-mem.dbSecretName" . }}
+                      key: {{ if .Values.postgresql.enabled }}postgres-password{{ else }}{{ .Values.database.existingSecretPasswordKey | default "password" }}{{ end }}
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.backup.existingSecret }}
+                      key: AWS_ACCESS_KEY_ID
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.backup.existingSecret }}
+                      key: AWS_SECRET_ACCESS_KEY
+              command:
+                - sh
+                - -c
+                - |
+                  set -euo pipefail
+                  ts=$(date -u +%Y%m%dT%H%M%SZ)
+                  out=/tmp/claude-mem-${ts}.sql.gz
+                  pg_dump -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" -d "$PGDATABASE" \
+                    --no-owner --clean --if-exists \
+                    | gzip -9 > "$out"
+                  aws s3 cp "$out" "s3://{{ .Values.backup.s3.bucket }}/{{ .Values.backup.s3.prefix }}claude-mem-${ts}.sql.gz" \
+                    {{- with .Values.backup.s3.endpoint }} --endpoint-url {{ . | quote }} {{- end }} \
+                    --region {{ .Values.backup.s3.region | quote }}
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+{{- end }}

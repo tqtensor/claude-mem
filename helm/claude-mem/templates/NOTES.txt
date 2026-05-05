@@ -1,0 +1,43 @@
+claude-mem has been installed.
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+Ingress hosts:
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}{{ (index .paths 0).path }}
+{{- end }}
+
+{{- else }}
+
+Worker service: {{ include "claude-mem.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.worker.port }}
+
+Forward the worker port locally:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "claude-mem.fullname" . }} {{ .Values.worker.port }}:{{ .Values.worker.port }}
+
+{{- end }}
+
+Health check (probe path, no auth required):
+  curl -fsS https://<host>/api/health
+
+{{- if gt (len .Values.auth.keys) 0 }}
+
+API key auth is enabled for {{ len .Values.auth.keys }} user(s). Distribute the keys you set in
+values.yaml (auth.keys) to your developers and have them run:
+
+  scripts/team-setup.sh --url https://<host> --key <their-key>
+{{- else }}
+
+WARNING: No API keys configured. /api/* endpoints are open to anyone with network access.
+Set values.yaml `auth.keys` (or `auth.existingSecret`) before exposing this on the public internet.
+{{- end }}
+
+{{- if and (eq .Values.database.type "postgres") .Values.postgresql.enabled }}
+
+Bundled PostgreSQL is enabled. Backup/restore is operator-driven:
+
+  # Backup (if backup.enabled=true, runs on schedule {{ .Values.backup.schedule }})
+  # Manual restore: aws s3 cp <snapshot> - | gunzip | psql -h <pg-host> -U {{ .Values.postgresql.auth.username }} -d {{ .Values.postgresql.auth.database }}
+{{- end }}

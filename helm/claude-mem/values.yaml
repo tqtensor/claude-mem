@@ -1,0 +1,126 @@
+image:
+  repository: ghcr.io/thedotmack/claude-mem
+  pullPolicy: IfNotPresent
+  tag: ""
+
+worker:
+  port: 37777
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: "1"
+    requests:
+      memory: 512Mi
+      cpu: 250m
+
+database:
+  type: postgres
+  url: ""
+  host: ""
+  port: 5432
+  name: claude_mem
+  user: claude_mem
+  password: ""
+  existingSecret: ""
+  existingSecretPasswordKey: password
+  sqlite:
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+
+auth:
+  keys: {}
+  existingSecret: ""
+  rateLimitRpm: 60
+
+chroma:
+  enabled: true
+  external: false
+  host: ""
+  port: 8000
+  apiKey: ""
+  existingSecret: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 20Gi
+  image:
+    repository: chromadb/chroma
+    tag: "0.5.20"
+    pullPolicy: IfNotPresent
+  resources:
+    limits:
+      memory: 1Gi
+      cpu: "1"
+    requests:
+      memory: 256Mi
+      cpu: 100m
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: mem.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: claude-mem-tls
+      hosts:
+        - mem.example.com
+
+service:
+  type: ClusterIP
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+postgresql:
+  enabled: true
+  auth:
+    database: claude_mem
+    username: claude_mem
+    password: ""
+  primary:
+    persistence:
+      enabled: true
+      size: 10Gi
+      accessModes:
+        - ReadWriteOnce
+
+backup:
+  enabled: false
+  schedule: "0 2 * * *"
+  image: bitnami/postgresql:16
+  s3:
+    bucket: ""
+    region: ""
+    prefix: "claude-mem/"
+    endpoint: ""
+  existingSecret: ""
+  retentionDays: 30
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: "500m"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

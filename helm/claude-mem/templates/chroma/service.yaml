@@ -1,0 +1,17 @@
+{{- if and .Values.chroma.enabled (not .Values.chroma.external) }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "claude-mem.fullname" . }}-chroma
+  labels:
+    {{- include "claude-mem.chroma.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.chroma.port }}
+      targetPort: {{ .Values.chroma.port }}
+      protocol: TCP
+  selector:
+    {{- include "claude-mem.chroma.selectorLabels" . | nindent 4 }}
+{{- end }}

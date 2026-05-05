@@ -1,0 +1,64 @@
+{{- if and .Values.chroma.enabled (not .Values.chroma.external) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "claude-mem.fullname" . }}-chroma
+  labels:
+    {{- include "claude-mem.chroma.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "claude-mem.chroma.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "claude-mem.chroma.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: chroma
+          image: "{{ .Values.chroma.image.repository }}:{{ .Values.chroma.image.tag }}"
+          imagePullPolicy: {{ .Values.chroma.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.chroma.port }}
+              protocol: TCP
+          env:
+            - name: PERSIST_DIRECTORY
+              value: /chroma/data
+            {{- if .Values.chroma.apiKey }}
+            - name: CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER
+              value: "chromadb.auth.token.TokenAuthCredentialsProvider"
+            - name: CHROMA_SERVER_AUTH_PROVIDER
+              value: "chromadb.auth.token.TokenAuthServerProvider"
+            - name: CHROMA_SERVER_AUTH_CREDENTIALS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-chroma" (include "claude-mem.fullname" .)) .Values.chroma.existingSecret }}
+                  key: api-key
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /api/v1/heartbeat
+              port: {{ .Values.chroma.port }}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/v1/heartbeat
+              port: {{ .Values.chroma.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.chroma.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /chroma/data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "claude-mem.fullname" . }}-chroma
+{{- end }}

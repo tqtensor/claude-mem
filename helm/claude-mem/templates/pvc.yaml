@@ -1,0 +1,17 @@
+{{- if eq .Values.database.type "sqlite" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "claude-mem.fullname" . }}-data
+  labels:
+    {{- include "claude-mem.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    {{- toYaml .Values.database.sqlite.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ .Values.database.sqlite.size }}
+  {{- if .Values.database.sqlite.storageClass }}
+  storageClassName: {{ .Values.database.sqlite.storageClass | quote }}
+  {{- end }}
+{{- end }}

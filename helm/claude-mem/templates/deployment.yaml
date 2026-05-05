@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "claude-mem.fullname" . }}
+  labels:
+    {{- include "claude-mem.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "claude-mem.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "claude-mem.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "claude-mem.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.worker.port }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "claude-mem.fullname" . }}-config
+          env:
+            {{- if eq .Values.database.type "postgres" }}
+            - name: CLAUDE_MEM_DATABASE_URL
+              value: {{ include "claude-mem.dbUrl" . | quote }}
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-mem.dbSecretName" . }}
+                  key: {{ .Values.database.existingSecretPasswordKey | default "password" }}
+            {{- end }}
+            {{- if or (gt (len .Values.auth.keys) 0) .Values.auth.existingSecret }}
+            - name: CLAUDE_MEM_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "claude-mem.authSecretName" . }}
+                  key: api-keys
+            {{- end }}
+            {{- if and (not .Values.chroma.external) .Values.chroma.apiKey }}
+            - name: CLAUDE_MEM_CHROMA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ default (printf "%s-chroma" (include "claude-mem.fullname" .)) .Values.chroma.existingSecret }}
+                  key: api-key
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /api/readiness
+              port: {{ .Values.worker.port }}
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /api/readiness
+              port: {{ .Values.worker.port }}
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.worker.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+          {{- if eq .Values.database.type "sqlite" }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- end }}
+      {{- if eq .Values.database.type "sqlite" }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "claude-mem.fullname" . }}-data
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
