@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import express from 'express';
 import http from 'http';
+import { SettingsDefaultsManager } from '../../../src/shared/SettingsDefaultsManager.js';
 import { createAuthMiddleware } from '../../../src/services/worker/http/middleware/auth.js';
+
+const settingsManagerIsMocked = SettingsDefaultsManager.getAllDefaults === undefined;
+const guard = settingsManagerIsMocked ? describe.skip : describe;
+
+const ENV_KEYS = ['CLAUDE_MEM_API_KEYS', 'CLAUDE_MEM_RATE_LIMIT_RPM'] as const;
 
 function startApp(handler: express.RequestHandler): Promise<{ port: number; close: () => Promise<void> }> {
   const app = express();
@@ -29,18 +35,32 @@ async function fetchPath(port: number, path: string, headers: Record<string, str
   return await fetch(`http://127.0.0.1:${port}${path}`, { headers });
 }
 
-describe('auth middleware', () => {
+guard('auth middleware', () => {
   let stop: (() => Promise<void>) | null = null;
+  const originalEnv: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const key of ENV_KEYS) {
+      originalEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
 
   afterEach(async () => {
     if (stop) {
       await stop();
       stop = null;
     }
+    for (const key of ENV_KEYS) {
+      if (originalEnv[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originalEnv[key];
+      }
+    }
   });
 
   it('bypasses entirely when no API keys configured', async () => {
-    delete process.env.CLAUDE_MEM_API_KEYS;
     const app = await startApp(createAuthMiddleware());
     stop = app.close;
     const res = await fetchPath(app.port, '/api/data');
@@ -97,6 +117,5 @@ describe('auth middleware', () => {
     expect(r2.status).toBe(200);
     expect(r3.status).toBe(200);
     expect(r4.status).toBe(429);
-    delete process.env.CLAUDE_MEM_RATE_LIMIT_RPM;
   });
 });
