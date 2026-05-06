@@ -247,14 +247,14 @@ curl -fsS -H "Authorization: Bearer $KEY" \
 
 The `worker.env` map (added in commit `ac4747b8 feat: pass worker.env values through to container`) is a generic key→value passthrough into the container's `env:` array. Useful entries discovered while bringing up `mem.company.com`:
 
-| Env var | Purpose |
-| --- | --- |
-| `CLAUDE_MEM_PROVIDER` | `openrouter` / `gemini` / `claude` (default — needs CLI in pod) |
-| `CLAUDE_MEM_OPENROUTER_BASE_URL` | Override for OpenRouter URL — point at LiteLLM/proxies |
-| `CLAUDE_MEM_OPENROUTER_MODEL` | Model id as advertised by the proxy |
-| `CLAUDE_MEM_OPENROUTER_API_KEY` | Bearer key (sops-encrypt + project through pulumi/secret-mount) |
-| `CLAUDE_MEM_CHROMA_ENABLED` | `false` to suppress chroma-mcp spawn attempts when chart's `chroma.enabled=false` |
-| `CLAUDE_MEM_CORS_EXTRA_ORIGINS` | Comma-separated browser origins to allow (e.g. `https://mem.company.com` for the bundled viewer SPA). Hooks themselves bypass CORS via Authorization header. |
+| Env var                          | Purpose                                                                                                                                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CLAUDE_MEM_PROVIDER`            | `openrouter` / `gemini` / `claude` (default — needs CLI in pod)                                                                                              |
+| `CLAUDE_MEM_OPENROUTER_BASE_URL` | Override for OpenRouter URL — point at LiteLLM/proxies                                                                                                       |
+| `CLAUDE_MEM_OPENROUTER_MODEL`    | Model id as advertised by the proxy                                                                                                                          |
+| `CLAUDE_MEM_OPENROUTER_API_KEY`  | Bearer key (sops-encrypt + project through pulumi/secret-mount)                                                                                              |
+| `CLAUDE_MEM_CHROMA_ENABLED`      | `false` to suppress chroma-mcp spawn attempts when chart's `chroma.enabled=false`                                                                            |
+| `CLAUDE_MEM_CORS_EXTRA_ORIGINS`  | Comma-separated browser origins to allow (e.g. `https://mem.company.com` for the bundled viewer SPA). Hooks themselves bypass CORS via Authorization header. |
 
 ### CORS and the Authorization bypass
 
@@ -307,53 +307,114 @@ curl -i -H "Authorization: Bearer wrong" https://mem.company.com/api/data
 
 ## 5. Wire local Claude Code to the cluster
 
-Each developer runs:
+Each developer needs: `node` ≥ 20, `npx`, `npm`, `git`, `jq`, `curl`, plus their personal API key (distributed out-of-band).
+
+> **Why this isn't a one-liner.** `npx -y claude-mem install` clones the marketplace plugin from upstream `thedotmack/claude-mem`, whose published versions do not contain remote-worker support. The hook reads `CLAUDE_MEM_REMOTE_URL` from `~/.claude-mem/settings.json`, doesn't recognize it, and falls back to `localhost:37777` — which has nothing listening, so the hook silently fails-closed. The remote-worker code, CORS auth-bypass, OpenRouter base-URL override, Dockerfile fix, and chart `worker.command/env` passthroughs all live on a fork's `feat/k8s-deployment` branch (e.g. `<your-gh-user>/claude-mem`). The steps below bootstrap once with `npx`, then replace the marketplace dir with a fresh clone of the fork branch.
+>
+> The marketplace dir created by `npx claude-mem install` is a **flat copy, not a git repo** — `git remote set-url` / `git fetch` against it will fail. You have to delete it and re-clone.
+
+### 1. Bootstrap the marketplace clone
 
 ```bash
-chmod +x scripts/team-setup.sh
-scripts/team-setup.sh \
-  --url https://mem.company.com \
-  --key <their-personal-key>
+npx -y claude-mem@latest install
 ```
 
-Then restart Claude Code. Watch hooks call into the cluster:
+Creates `~/.claude/plugins/marketplaces/thedotmack/` (flat copy from upstream), registers the plugin in `~/.claude/plugins/known_marketplaces.json`, runs `npm install`, and writes `~/.claude-mem/settings.json` with defaults.
+
+### 2. Replace the marketplace dir with the fork branch
+
+```bash
+rm -rf ~/.claude/plugins/marketplaces/thedotmack
+git clone --depth 1 -b feat/k8s-deployment \
+  https://github.com/<your-gh-user>/claude-mem.git \
+  ~/.claude/plugins/marketplaces/thedotmack
+(cd ~/.claude/plugins/marketplaces/thedotmack && npm install)
+```
+
+Verify the fork's hooks landed:
+
+```bash
+grep -rl "CLAUDE_MEM_REMOTE_URL" ~/.claude/plugins/marketplaces/thedotmack/plugin/ \
+  | wc -l                       # expect ≥ 3
+grep -c "headers.authorization" \
+  ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs
+                                # expect ≥ 1 (CORS auth-bypass commit)
+```
+
+If either count is 0, the clone didn't land — re-run.
+
+### 3. Wipe the versioned plugin cache
+
+```bash
+rm -rf ~/.claude/plugins/cache/thedotmack/claude-mem/*
+```
+
+The hook resolves the versioned cache directory (`~/.claude/plugins/cache/thedotmack/claude-mem/<version>/`) before falling back to the marketplace dir. With the cache empty, the marketplace dir (now the fork branch) becomes the resolved source. The cache is keyed by the version in `.claude-plugin/marketplace.json` — if you bump that on the fork without wiping the cache, a stale `<version>/` dir will resolve instead of the new one.
+
+### 4. Disable autoUpdate and re-point the registry
+
+```bash
+jq '.thedotmack.autoUpdate = false
+    | .thedotmack.source.repo = "<your-gh-user>/claude-mem"' \
+   ~/.claude/plugins/known_marketplaces.json > /tmp/km && \
+  mv /tmp/km ~/.claude/plugins/known_marketplaces.json
+```
+
+Without this, Claude Code will silently revert to upstream `main` on its next plugin sync.
+
+### 5. Write the remote URL and API key into settings
+
+```bash
+URL="https://mem.company.com"
+KEY="<personal-api-key>"
+
+jq --arg url "$URL" --arg key "$KEY" \
+   '. + {"CLAUDE_MEM_REMOTE_URL": $url, "CLAUDE_MEM_API_KEY": $key}' \
+   ~/.claude-mem/settings.json > /tmp/cm && \
+  mv /tmp/cm ~/.claude-mem/settings.json
+```
+
+Equivalent to running the fork's `scripts/team-setup.sh --url $URL --key $KEY`, but skips the `npx install` step (we already ran it in step 1 and replaced its output in step 2).
+
+### 6. Restart Claude Code
+
+Required — the hooks load `~/.claude-mem/settings.json` once at session start.
+
+### Verify
+
+After restart, watch hooks call into the cluster (cluster admins only):
 
 ```bash
 kubectl -n claude-mem logs -f deploy/claude-mem
 ```
 
-Expected: `→ POST /api/observations`, `→ POST /api/init`, etc., with `200 OK` responses.
-
-### Caveat: remote-worker support is on a fork branch
-
-`scripts/team-setup.sh` runs `npx -y claude-mem install`, which makes Claude Code clone the marketplace plugin from `thedotmack/claude-mem` on GitHub (default branch). **That repo's published versions do not include the remote-worker feature** (no `CLAUDE_MEM_REMOTE_URL` resolution in the bundled scripts). The hook reads `~/.claude-mem/settings.json`, ignores the `REMOTE_URL` key it doesn't know about, and tries `localhost:37777` — which has nothing listening, so the hook silently fails-closed.
-
-The remote-worker code, the CORS bypass, the OpenRouter base-URL override, the Dockerfile fix, and the chart `worker.command/env` passthroughs all live on a fork's `feat/k8s-deployment` branch (e.g. `<your-gh-user>/claude-mem`). To make Claude Code use that fork instead:
+Expected: `→ POST /api/observations`, `→ POST /api/init`, etc., with `200 OK` responses. End-users without cluster access can confirm with the auth-gated endpoint check:
 
 ```bash
-# 1. Re-point the marketplace clone at your fork
-cd ~/.claude/plugins/marketplaces/thedotmack
-git remote set-url origin https://github.com/<your-gh-user>/claude-mem
-git fetch origin feat/k8s-deployment
-git checkout -b feat/k8s-deployment FETCH_HEAD          # first time
-# git reset --hard FETCH_HEAD                           # subsequent updates
-
-# 2. Disable autoUpdate so Claude Code doesn't revert you to upstream main
-jq '.thedotmack.autoUpdate = false
-    | .thedotmack.source.repo = "<your-gh-user>/claude-mem"' \
-  ~/.claude/plugins/known_marketplaces.json > /tmp/km && \
-  mv /tmp/km ~/.claude/plugins/known_marketplaces.json
-
-# 3. Wipe the versioned plugin caches — the hook resolves to the cache first.
-#    With no cache, it falls back to the marketplace dir we just updated.
-rm -rf ~/.claude/plugins/cache/thedotmack/claude-mem/*
-
-# 4. Restart Claude Code.
+curl -i -H "Authorization: Bearer $KEY" https://mem.company.com/api/version | head -1
+# → HTTP/2 200
 ```
 
-If hooks still don't show up in the worker logs after restart, `grep -c "headers.authorization" ~/.claude/plugins/marketplaces/thedotmack/plugin/scripts/worker-service.cjs` should be ≥ 1. If it's 0, the marketplace dir didn't pick up the fork branch — re-run step 1.
+### Footguns
 
-The plugin manifest at `.claude-plugin/marketplace.json` advertises the version; Claude Code uses that to key the cache directory under `~/.claude/plugins/cache/thedotmack/claude-mem/<version>/`. If you bump the version on your fork without wiping the cache, you'll get a stale `<version>/` dir alongside the new one and `ls -dt | head -1` will pick the wrong one.
+- **Re-running `npx claude-mem install` resets everything.** It repopulates `~/.claude/plugins/marketplaces/thedotmack/` from upstream and flips `autoUpdate` back to `true`. Repeat steps 2–4 after any future install/upgrade.
+- **Hooks fail closed.** If the remote worker is unreachable, you'll see "remote worker unreachable" warnings rather than a fallback to local mode. Hit `/api/health` first when debugging.
+- **API keys aren't recoverable** from the cluster — only their SHA-256 hash is stored. Save it in a password manager when issued.
+
+### Upgrading later
+
+When a newer commit lands on `feat/k8s-deployment`:
+
+```bash
+cd ~/.claude/plugins/marketplaces/thedotmack
+git fetch origin feat/k8s-deployment
+git reset --hard FETCH_HEAD
+npm install
+rm -rf ~/.claude/plugins/cache/thedotmack/claude-mem/*
+# Then restart Claude Code.
+```
+
+This works because step 2 above replaced the flat copy with a real git clone — `git fetch` / `git reset --hard` are valid here, unlike against the dir that `npx install` produces.
 
 ### Why `npm publish` doesn't fix this
 
@@ -516,43 +577,43 @@ helm uninstall claude-mem -n claude-mem
 
 These are real today; track them before promising users anything beyond the documented path.
 
-| Limitation                                                                 | Owner                                                                           | Tracked                                                    |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Remote-worker support, CORS bypass, OpenRouter base-URL override, Dockerfile + chart fixes live only on a fork branch | Upstream `thedotmack/claude-mem main` doesn't include them; `npx claude-mem install` clones from there | Use the fork swap in [§5](#5-wire-local-claude-code-to-the-cluster); long-term, open a PR upstream |
-| Dockerfile only copies `worker-service.cjs` — plugin assets missing at runtime | `/modes`, `/ui`, `/skills`, `/plugin/.mcp.json`, `/package.json` not copied | Patched on `feat/k8s-deployment` (commit `062f7b7e`); upstream still needs the `COPY` lines from [§1](#1-build-and-push-the-image) |
-| Container `CMD start` exits cleanly → K8s restart loop                     | `bun worker-service.cjs start` daemonizes and exits 0; the foreground HTTP server runs under `--daemon` | Workaround on `feat/k8s-deployment` via `worker.command` passthrough (commits `af6197ea` + `ac4747b8`); see [§3](#3-install-the-chart) |
-| Worker AI defaults to `claude` CLI (not in image)                          | Boots OK, but summarization always fails until you set `CLAUDE_MEM_PROVIDER=openrouter` (or `gemini`) | OpenRouter base-URL override added on `feat/k8s-deployment` (commit `36623f4a`); upstream hardcodes openrouter.ai |
-| Public bitnami postgres tags paywalled (Aug 2025+)                         | `docker.io/bitnami/postgresql:<version>` returns `not found`                    | Pin `postgresql.image.repository=bitnamilegacy/postgresql` |
-| Chroma 0.5.20 default image incompatible with `runAsNonRoot: true`         | Image tries to write `/chroma/chroma.log` (non-writable for uid 1000)           | Set `chroma.enabled=false` *and* `worker.env.CLAUDE_MEM_CHROMA_ENABLED=false`. Worker logs `[CHROMA] User prompt sync failed` if you only do the chart-side flag. |
-| No horizontal scaling (`replicas: 1` hardcoded)                            | Worker holds in-process state (rate limits, branch manager, SSE, search caches) | Future phase: externalize state to Redis + leader election |
-| Local SQLite history not migrated to team server                           | New users start with an empty server view of the cluster                        | Out of scope for v1                                        |
-| Chroma collection is single-tenant (no per-user isolation in vector store) | `ChromaSync.ts` writes lack `user_id` metadata                                  | `docs/team-k8s-plan.md` Phase 4                            |
-| Backup CronJob only supports PostgreSQL                                    | SQLite snapshotting is operator-driven (`kubectl cp`)                           | Acceptable; revisit if SQLite mode persists long-term      |
+| Limitation                                                                                                            | Owner                                                                                                   | Tracked                                                                                                                                                           |
+| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Remote-worker support, CORS bypass, OpenRouter base-URL override, Dockerfile + chart fixes live only on a fork branch | Upstream `thedotmack/claude-mem main` doesn't include them; `npx claude-mem install` clones from there  | Use the fork swap in [§5](#5-wire-local-claude-code-to-the-cluster); long-term, open a PR upstream                                                                |
+| Dockerfile only copies `worker-service.cjs` — plugin assets missing at runtime                                        | `/modes`, `/ui`, `/skills`, `/plugin/.mcp.json`, `/package.json` not copied                             | Patched on `feat/k8s-deployment` (commit `062f7b7e`); upstream still needs the `COPY` lines from [§1](#1-build-and-push-the-image)                                |
+| Container `CMD start` exits cleanly → K8s restart loop                                                                | `bun worker-service.cjs start` daemonizes and exits 0; the foreground HTTP server runs under `--daemon` | Workaround on `feat/k8s-deployment` via `worker.command` passthrough (commits `af6197ea` + `ac4747b8`); see [§3](#3-install-the-chart)                            |
+| Worker AI defaults to `claude` CLI (not in image)                                                                     | Boots OK, but summarization always fails until you set `CLAUDE_MEM_PROVIDER=openrouter` (or `gemini`)   | OpenRouter base-URL override added on `feat/k8s-deployment` (commit `36623f4a`); upstream hardcodes openrouter.ai                                                 |
+| Public bitnami postgres tags paywalled (Aug 2025+)                                                                    | `docker.io/bitnami/postgresql:<version>` returns `not found`                                            | Pin `postgresql.image.repository=bitnamilegacy/postgresql`                                                                                                        |
+| Chroma 0.5.20 default image incompatible with `runAsNonRoot: true`                                                    | Image tries to write `/chroma/chroma.log` (non-writable for uid 1000)                                   | Set `chroma.enabled=false` *and* `worker.env.CLAUDE_MEM_CHROMA_ENABLED=false`. Worker logs `[CHROMA] User prompt sync failed` if you only do the chart-side flag. |
+| No horizontal scaling (`replicas: 1` hardcoded)                                                                       | Worker holds in-process state (rate limits, branch manager, SSE, search caches)                         | Future phase: externalize state to Redis + leader election                                                                                                        |
+| Local SQLite history not migrated to team server                                                                      | New users start with an empty server view of the cluster                                                | Out of scope for v1                                                                                                                                               |
+| Chroma collection is single-tenant (no per-user isolation in vector store)                                            | `ChromaSync.ts` writes lack `user_id` metadata                                                          | `docs/team-k8s-plan.md` Phase 4                                                                                                                                   |
+| Backup CronJob only supports PostgreSQL                                                                               | SQLite snapshotting is operator-driven (`kubectl cp`)                                                   | Acceptable; revisit if SQLite mode persists long-term                                                                                                             |
 
 ---
 
 ## Reference: chart values matrix
 
-| Value                                | Default                         | Notes                                                               |
-| ------------------------------------ | ------------------------------- | ------------------------------------------------------------------- |
-| `image.repository`                   | `ghcr.io/thedotmack/claude-mem` | Override for your registry                                          |
-| `image.tag`                          | `""` (uses `Chart.AppVersion`)  | Pin in production                                                   |
-| `worker.port`                        | `37777`                         | Drives container, service, probes — single source of truth          |
-| `worker.command`                     | `[]` (uses image CMD)           | **Set to `[bun, worker-service.cjs, --daemon]`** until image CMD is fixed |
-| `worker.args`                        | `[]`                            | Container `args` override; rarely needed alongside `worker.command` |
-| `worker.env`                         | `{}`                            | Generic env-var map projected into the deployment. Used for AI provider, CORS, chroma off-switch — see [§3](#3-install-the-chart). |
-| `database.type`                      | `postgres`                      | `sqlite` is safer single-machine; `postgres` validated end-to-end on `feat/k8s-deployment` |
-| `database.sqlite.size`               | `10Gi`                          | Resize the PVC manually if needed; cannot shrink                    |
-| `auth.keys`                          | `{}`                            | Map of `username → key`. **Empty = unauthenticated worker**         |
-| `auth.rateLimitRpm`                  | `60`                            | Per-IP requests/minute                                              |
-| `chroma.enabled`                     | `true`                          | **Set to `false`** — 0.5.20 default image fails under `runAsNonRoot: true`. Also set `worker.env.CLAUDE_MEM_CHROMA_ENABLED=false` so the worker stops trying to spawn `chroma-mcp`. |
-| `ingress.annotations`                | `{cert-manager.io/cluster-issuer: letsencrypt-prod}` | Override to `{}` (or just nginx-relevant entries) when using Cloudflare Origin CA — otherwise cert-manager and the origin cert race |
-| `ingress.hosts[0].host`              | `mem.example.com`               | Replace with your domain                                            |
-| `ingress.tls[0].secretName`          | `claude-mem-tls`                | Reference an existing TLS secret (Cloudflare Origin CA) instead of letting cert-manager mint one |
-| `backup.enabled`                     | `false`                         | Postgres-only; opt-in                                               |
-| `postgresql.enabled`                 | `true`                          | Set false to bring your own Postgres or run sqlite mode             |
-| `postgresql.image.repository`        | `bitnami/postgresql`            | **Override to `bitnamilegacy/postgresql`** — public bitnami tags moved to a paid registry in Aug 2025 |
-| `postgresql.image.tag`               | (subchart default)              | Pin to e.g. `17.6.0-debian-12-r4` so the new repo can resolve it    |
-| `postgresql.primary.persistence.storageClass` | `""` (default class)   | Set to a non-NFS class for SQLite; NFS works for Postgres + Chroma  |
+| Value                                         | Default                                              | Notes                                                                                                                                                                               |
+| --------------------------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `image.repository`                            | `ghcr.io/thedotmack/claude-mem`                      | Override for your registry                                                                                                                                                          |
+| `image.tag`                                   | `""` (uses `Chart.AppVersion`)                       | Pin in production                                                                                                                                                                   |
+| `worker.port`                                 | `37777`                                              | Drives container, service, probes — single source of truth                                                                                                                          |
+| `worker.command`                              | `[]` (uses image CMD)                                | **Set to `[bun, worker-service.cjs, --daemon]`** until image CMD is fixed                                                                                                           |
+| `worker.args`                                 | `[]`                                                 | Container `args` override; rarely needed alongside `worker.command`                                                                                                                 |
+| `worker.env`                                  | `{}`                                                 | Generic env-var map projected into the deployment. Used for AI provider, CORS, chroma off-switch — see [§3](#3-install-the-chart).                                                  |
+| `database.type`                               | `postgres`                                           | `sqlite` is safer single-machine; `postgres` validated end-to-end on `feat/k8s-deployment`                                                                                          |
+| `database.sqlite.size`                        | `10Gi`                                               | Resize the PVC manually if needed; cannot shrink                                                                                                                                    |
+| `auth.keys`                                   | `{}`                                                 | Map of `username → key`. **Empty = unauthenticated worker**                                                                                                                         |
+| `auth.rateLimitRpm`                           | `60`                                                 | Per-IP requests/minute                                                                                                                                                              |
+| `chroma.enabled`                              | `true`                                               | **Set to `false`** — 0.5.20 default image fails under `runAsNonRoot: true`. Also set `worker.env.CLAUDE_MEM_CHROMA_ENABLED=false` so the worker stops trying to spawn `chroma-mcp`. |
+| `ingress.annotations`                         | `{cert-manager.io/cluster-issuer: letsencrypt-prod}` | Override to `{}` (or just nginx-relevant entries) when using Cloudflare Origin CA — otherwise cert-manager and the origin cert race                                                 |
+| `ingress.hosts[0].host`                       | `mem.example.com`                                    | Replace with your domain                                                                                                                                                            |
+| `ingress.tls[0].secretName`                   | `claude-mem-tls`                                     | Reference an existing TLS secret (Cloudflare Origin CA) instead of letting cert-manager mint one                                                                                    |
+| `backup.enabled`                              | `false`                                              | Postgres-only; opt-in                                                                                                                                                               |
+| `postgresql.enabled`                          | `true`                                               | Set false to bring your own Postgres or run sqlite mode                                                                                                                             |
+| `postgresql.image.repository`                 | `bitnami/postgresql`                                 | **Override to `bitnamilegacy/postgresql`** — public bitnami tags moved to a paid registry in Aug 2025                                                                               |
+| `postgresql.image.tag`                        | (subchart default)                                   | Pin to e.g. `17.6.0-debian-12-r4` so the new repo can resolve it                                                                                                                    |
+| `postgresql.primary.persistence.storageClass` | `""` (default class)                                 | Set to a non-NFS class for SQLite; NFS works for Postgres + Chroma                                                                                                                  |
 
 Defaults live in `helm/claude-mem/values.yaml`.
