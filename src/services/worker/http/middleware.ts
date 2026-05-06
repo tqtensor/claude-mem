@@ -12,20 +12,34 @@ export function createMiddleware(
 
   middlewares.push(express.json({ limit: '5mb' }));
 
-  middlewares.push(cors({
-    origin: (origin, callback) => {
-      if (!origin ||
-          origin.startsWith('http://localhost:') ||
-          origin.startsWith('http://127.0.0.1:')) {
-        callback(null, true);
-      } else {
-        callback(new Error('CORS not allowed'));
-      }
-    },
-    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'X-Requested-With'],
-    credentials: false
-  }));
+  const extraOrigins = (process.env.CLAUDE_MEM_CORS_EXTRA_ORIGINS ?? '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  middlewares.push((req: Request, _res: Response, next: NextFunction) => {
+    if (req.headers['authorization']) {
+      // Bearer-authenticated callers (hooks, CLI, server-to-server) bypass
+      // CORS — the bearer token is the actual access gate, and Origin is a
+      // browser-only signal that doesn't apply here.
+      return next();
+    }
+    return cors({
+      origin: (origin, callback) => {
+        if (!origin ||
+            origin.startsWith('http://localhost:') ||
+            origin.startsWith('http://127.0.0.1:') ||
+            extraOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          logger.warn('HTTP', 'CORS rejected origin', { origin });
+          callback(new Error('CORS not allowed'));
+        }
+      },
+      methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+      allowedHeaders: ['Content-Type', 'X-Requested-With', 'Authorization'],
+      credentials: false
+    })(req, _res, next);
+  });
 
   middlewares.push((req: Request, res: Response, next: NextFunction) => {
     const staticExtensions = ['.html', '.js', '.css', '.svg', '.png', '.jpg', '.jpeg', '.webp', '.woff', '.woff2', '.ttf', '.eot'];
