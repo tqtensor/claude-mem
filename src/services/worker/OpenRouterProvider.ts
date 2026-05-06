@@ -17,7 +17,16 @@ import {
 import { ClassifiedProviderError } from './provider-errors.js';
 import { withRetry } from './retry.js';
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+function getOpenRouterApiUrl(): string {
+  const settings = SettingsDefaultsManager.loadFromFile(USER_SETTINGS_PATH);
+  return (
+    settings.CLAUDE_MEM_OPENROUTER_BASE_URL ||
+    process.env.CLAUDE_MEM_OPENROUTER_BASE_URL ||
+    DEFAULT_OPENROUTER_API_URL
+  );
+}
 
 /**
  * Parse Retry-After header (seconds or HTTP-date). Returns ms or undefined.
@@ -434,7 +443,7 @@ export class OpenRouterProvider {
     const data = await withRetry<OpenRouterResponse>(async (attemptSignal) => {
       let response: Response;
       try {
-        response = await fetch(OPENROUTER_API_URL, {
+        response = await fetch(getOpenRouterApiUrl(), {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${apiKey}`,
