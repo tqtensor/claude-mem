@@ -26,9 +26,9 @@ Single replica by design. The worker holds in-process state (rate limits, restar
 
 - Kubernetes ≥ 1.27
 - nginx-ingress controller installed
-- cert-manager installed with a `ClusterIssuer` pointing at Let's Encrypt (or your CA)
-- A `StorageClass` that supports `ReadWriteOnce` (any block-storage class — Nebius `csi-nebius` works). **Do not** use NFS-backed storage for SQLite — WAL mode is incompatible with NFS.
-- A DNS record for the worker (e.g. `mem.company.com`) pointing at the nginx ingress IP.
+- TLS for the worker: either cert-manager + a Let's Encrypt `ClusterIssuer`, **or** a Cloudflare Origin CA certificate written into a `kubernetes.io/tls` secret in the worker's namespace (validated path — see [Cloudflare Origin CA alternative](#cloudflare-origin-ca-alternative))
+- A `StorageClass` that supports `ReadWriteOnce` (any block-storage class — Nebius `csi-nebius` works). **Do not** use NFS-backed storage for SQLite — WAL mode is incompatible with NFS. Postgres + Chroma on NFS works in practice (validated on Nebius `nfs-dns`).
+- A DNS record for the worker (e.g. `mem.company.com`) pointing at the nginx ingress IP. With Cloudflare proxying, an `A` record (proxied) on the apex/sub-domain works.
 
 ### Local
 
@@ -78,11 +78,55 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller \
   -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
 ```
 
+### Cloudflare Origin CA alternative
+
+If your zone is on Cloudflare and you'd rather not run cert-manager, you can issue a 15-year Origin CA cert and let Cloudflare terminate TLS at the edge:
+
+1. Create a proxied `A` record pointing the worker hostname at the nginx ingress IP (or any reachable IP — Cloudflare proxies it).
+2. Mint a Cloudflare Origin CA certificate for the hostname (one private key + CSR + `cloudflare.OriginCaCertificate`). The result is a `tls.crt` / `tls.key` pair valid only between Cloudflare and your origin.
+3. Create a `kubernetes.io/tls` secret in the `claude-mem` namespace with that pair (e.g. `memory-tls-secret`) and reference it from `ingress.tls[0].secretName`.
+4. **Drop the `cert-manager.io/cluster-issuer` annotation** in `ingress.annotations` — it triggers cert-manager to provision a competing cert. Override `ingress.annotations` with just nginx-relevant entries.
+
+Validated against this Pulumi snippet (Python):
+
+```python
+from resources.cloudflare.tls.utils import create_origin_ca_cert  # local helper
+
+memory_dns = cloudflare.DnsRecord(..., name="memory", type="A", content=nginx_ip, proxied=True)
+memory_cert_bundle = create_origin_ca_cert(host=memory_dns)  # → (OriginCaCertificate, PrivateKey)
+
+k8s.core.v1.Secret(
+    "memory_tls_secret",
+    metadata={"name": "memory-tls-secret", "namespace": "claude-mem"},
+    type="kubernetes.io/tls",
+    data=Output.all(
+        memory_cert_bundle[0].certificate,
+        memory_cert_bundle[1].private_key_pem,
+    ).apply(lambda args: encode_tls_secret_data(args[0], args[1])),
+)
+```
+
+Set Cloudflare's SSL/TLS mode to **Full (strict)** for the zone so it actually validates the origin cert.
+
 ---
 
 ## 1. Build and push the image
 
 The Dockerfile copies pre-built artifacts (`plugin/scripts/worker-service.cjs`), so the build step **must** run locally before `docker build`.
+
+> **Heads-up — Dockerfile is currently incomplete.** The shipped Dockerfile only copies `plugin/scripts/worker-service.cjs` and `plugin/package.json`, which is enough for the binary to start but **not** to initialize. The bundled worker resolves plugin assets relative to its own dirname's parent (`getPackageRoot() = /app/.. = /`), so it expects `/modes`, `/ui`, `/skills`, `/plugin/.mcp.json`, and `/package.json` at the image root. Without them you'll see the worker bind to port 37777 and then `Background initialization failed: Critical: code.json mode file missing`, returning 503 on `/api/readiness` forever.
+>
+> Add this to the Dockerfile before the `USER 1000` line until upstream fixes it:
+>
+> ```dockerfile
+> COPY plugin/modes /modes
+> COPY plugin/ui /ui
+> COPY plugin/skills /skills
+> COPY plugin/.mcp.json /plugin/.mcp.json
+> COPY plugin/package.json /package.json
+> ```
+>
+> **Also**: the image's default `CMD ["bun", "worker-service.cjs", "start"]` is wrong for Kubernetes. The `start` subcommand spawns a daemon child process and exits with code 0, which K8s reads as `Completed` and restarts forever. The HTTP server actually runs under the default/`--daemon` case. Either rebake the image with `CMD ["bun", "worker-service.cjs", "--daemon"]`, **or** override at deploy time via the chart (see [§3](#3-install-the-chart)).
 
 ```bash
 cd <repo-root>
@@ -145,10 +189,22 @@ helm upgrade -i claude-mem helm/claude-mem/ \
   --set "ingress.hosts[0].paths[0].path=/" \
   --set "ingress.hosts[0].paths[0].pathType=Prefix" \
   --set "ingress.tls[0].secretName=claude-mem-tls" \
-  --set "ingress.tls[0].hosts[0]=mem.company.com"
+  --set "ingress.tls[0].hosts[0]=mem.company.com" \
+  --set "worker.command={bun,worker-service.cjs,--daemon}"
 ```
 
 For private registries, also pass `--set imagePullSecrets[0].name=<your-secret>`.
+
+> **`worker.command` override is required** until the Dockerfile's `CMD` is fixed upstream (see [§1](#1-build-and-push-the-image)). The chart's `templates/deployment.yaml` reads `worker.command` and `worker.args` and passes them through to the container spec; the value above swaps `start` (which exits) for `--daemon` (which runs the HTTP server in the foreground).
+>
+> **Bitnami postgres image gotcha (Aug 2025+).** The bitnami subchart pulls `docker.io/bitnami/postgresql:<version>`, but Bitnami moved versioned tags to a paid registry — the public Docker Hub repo only has `latest` and digest-tags now, so `pulumi up` / `helm install` will fail with `ImagePullBackOff` and `failed to resolve reference … not found`. The community fork `bitnamilegacy/postgresql` keeps the tags. Pin it:
+>
+> ```
+> --set postgresql.image.repository=bitnamilegacy/postgresql \
+> --set postgresql.image.tag=17.6.0-debian-12-r4
+> ```
+>
+> **Chroma 0.5.20 + `runAsNonRoot: true` is broken.** The default chroma image tries to write `/chroma/chroma.log` (a path baked into its `log_config.yml`) and crashes with `PermissionError: [Errno 13] Permission denied` when the chart's pod security context forces user 1000. Until upstream chroma logs to stdout (or the chart adds a writable log path), set `--set chroma.enabled=false`. The worker continues to run; only semantic search degrades.
 
 ### Why `database.type=sqlite`
 
@@ -378,6 +434,10 @@ These are real today; track them before promising users anything beyond the docu
 | Limitation                                                                 | Owner                                                                           | Tracked                                                    |
 | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `database.type=postgres` does not work end-to-end                          | SessionStore.ts (247 sync `bun:sqlite` sites) needs async conversion            | `docs/team-k8s-plan.md` Phase 2 (partial) + Phase 3        |
+| Dockerfile only copies `worker-service.cjs` — plugin assets missing at runtime | `/modes`, `/ui`, `/skills`, `/plugin/.mcp.json`, `/package.json` not copied | Until upstream patch lands, add the `COPY` lines from [§1](#1-build-and-push-the-image) |
+| Container `CMD start` exits cleanly → K8s restart loop                     | `bun worker-service.cjs start` daemonizes and exits 0; the foreground HTTP server runs under `--daemon` | Until upstream patch lands, override `worker.command` (see [§3](#3-install-the-chart)) |
+| Public bitnami postgres tags paywalled (Aug 2025+)                         | `docker.io/bitnami/postgresql:<version>` returns `not found`                    | Pin `postgresql.image.repository=bitnamilegacy/postgresql` |
+| Chroma 0.5.20 default image incompatible with `runAsNonRoot: true`         | Image tries to write `/chroma/chroma.log` (non-writable for uid 1000)           | Set `chroma.enabled=false`; revisit when chroma logs to stdout or chart adds writable log path |
 | No horizontal scaling (`replicas: 1` hardcoded)                            | Worker holds in-process state (rate limits, branch manager, SSE, search caches) | Future phase: externalize state to Redis + leader election |
 | Local SQLite history not migrated to team server                           | New users start with an empty server view of the cluster                        | Out of scope for v1                                        |
 | Chroma collection is single-tenant (no per-user isolation in vector store) | `ChromaSync.ts` writes lack `user_id` metadata                                  | `docs/team-k8s-plan.md` Phase 4                            |
@@ -396,7 +456,9 @@ These are real today; track them before promising users anything beyond the docu
 | `database.sqlite.size`  | `10Gi`                          | Resize the PVC manually if needed; cannot shrink                    |
 | `auth.keys`             | `{}`                            | Map of `username → key`. **Empty = unauthenticated worker**         |
 | `auth.rateLimitRpm`     | `60`                            | Per-IP requests/minute                                              |
-| `chroma.enabled`        | `true`                          | Set false if Chroma pod misbehaves; worker keeps working without it |
+| `chroma.enabled`        | `true`                          | **Set to `false`** — 0.5.20 default image fails under `runAsNonRoot: true`. Worker runs without it. |
+| `worker.command`        | `[]` (uses image CMD)           | **Set to `[bun, worker-service.cjs, --daemon]`** until image CMD is fixed |
+| `worker.args`           | `[]`                            | Container `args` override; rarely needed alongside `worker.command` |
 | `ingress.hosts[0].host` | `mem.example.com`               | Replace with your domain                                            |
 | `backup.enabled`        | `false`                         | Postgres-only; opt-in                                               |
 | `postgresql.enabled`    | `true`                          | Set false to bring your own Postgres or run sqlite mode             |
