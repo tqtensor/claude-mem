@@ -9,6 +9,14 @@ COPY plugin/scripts/worker-service.cjs .
 COPY plugin/package.json .
 RUN bun install --production
 
+# The bundled worker resolves plugin assets relative to its own dirname's parent
+# (getPackageRoot() = /app/.. = /), so plugin assets must live at the root.
+COPY plugin/modes /modes
+COPY plugin/ui /ui
+COPY plugin/skills /skills
+COPY plugin/.mcp.json /plugin/.mcp.json
+COPY plugin/package.json /package.json
+
 RUN mkdir -p /data && chown 1000:1000 /data
 VOLUME ["/data"]
 USER 1000
