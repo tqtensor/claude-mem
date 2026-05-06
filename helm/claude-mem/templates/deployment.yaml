@@ -64,6 +64,10 @@ spec:
                   name: {{ default (printf "%s-chroma" (include "claude-mem.fullname" .)) .Values.chroma.existingSecret }}
                   key: api-key
             {{- end }}
+            {{- range $name, $value := .Values.worker.env }}
+            - name: {{ $name | quote }}
+              value: {{ $value | quote }}
+            {{- end }}
           startupProbe:
             httpGet:
               path: /api/readiness
