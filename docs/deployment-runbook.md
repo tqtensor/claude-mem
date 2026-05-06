@@ -328,7 +328,7 @@ Expected: `→ POST /api/observations`, `→ POST /api/init`, etc., with `200 OK
 
 `scripts/team-setup.sh` runs `npx -y claude-mem install`, which makes Claude Code clone the marketplace plugin from `thedotmack/claude-mem` on GitHub (default branch). **That repo's published versions do not include the remote-worker feature** (no `CLAUDE_MEM_REMOTE_URL` resolution in the bundled scripts). The hook reads `~/.claude-mem/settings.json`, ignores the `REMOTE_URL` key it doesn't know about, and tries `localhost:37777` — which has nothing listening, so the hook silently fails-closed.
 
-The remote-worker code, the CORS bypass, the OpenRouter base-URL override, the Dockerfile fix, and the chart `worker.command/env` passthroughs all live on a fork's `feat/k8s-deployment` branch (e.g. `tqtensor/claude-mem`). To make Claude Code use that fork instead:
+The remote-worker code, the CORS bypass, the OpenRouter base-URL override, the Dockerfile fix, and the chart `worker.command/env` passthroughs all live on a fork's `feat/k8s-deployment` branch (e.g. `<your-gh-user>/claude-mem`). To make Claude Code use that fork instead:
 
 ```bash
 # 1. Re-point the marketplace clone at your fork
